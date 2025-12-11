@@ -402,7 +402,7 @@ with tab_pred:
     )
     st.dataframe(forecast_table)
 
-        # ============================================================
+    # ============================================================
     # PRICE HISTORY + 5-DAY FORECAST CHART
     # ============================================================
     st.markdown("### Price history and 5-day forecast")
@@ -431,47 +431,43 @@ with tab_pred:
         hist_last5["date"] = pd.to_datetime(hist_last5["date"])
         forecast_df["date"] = pd.to_datetime(forecast_df["date"])
 
-        # ---- Build layered Altair chart ----
-        base = alt.Chart().encode(
-            x=alt.X(
-                "date:T",
-                title="Date",
-                axis=alt.Axis(format="%b %d", labelAngle=-45),
-            ),
-            y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
-        )
-
-        # History: darker blue
+                # ---- Build layered Altair chart (simple, no transforms) ----
         hist_chart = (
-            base
+            alt.Chart(hist_last5)
             .mark_line(point=True, color="#1f77b4")
             .encode(
+                x=alt.X(
+                    "date:T",
+                    title="Date",
+                    axis=alt.Axis(format="%b %d", labelAngle=-45),
+                ),
+                y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
                 tooltip=[
                     alt.Tooltip("date:T", title="Date"),
                     alt.Tooltip("price:Q", title="History close"),
-                ]
+                ],
             )
-            .transform_calculate(series='"History (close)"')
-            .transform_fold(["price"], as_=["value_name", "price"])
-            .properties(data=hist_last5)
         )
 
-        # Forecast: lighter blue
         forecast_chart = (
-            base
+            alt.Chart(forecast_df)
             .mark_line(point=True, color="#7fbfff")
             .encode(
+                x=alt.X(
+                    "date:T",
+                    title="Date",
+                    axis=alt.Axis(format="%b %d", labelAngle=-45),
+                ),
+                y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
                 tooltip=[
                     alt.Tooltip("date:T", title="Date"),
                     alt.Tooltip("price:Q", title="Forecast"),
-                ]
+                ],
             )
-            .transform_calculate(series='"Forecast"')
-            .transform_fold(["price"], as_=["value_name", "price"])
-            .properties(data=forecast_df)
         )
 
         chart = (hist_chart + forecast_chart).properties(height=350)
+
 
         st.altair_chart(chart, use_container_width=True)
 
