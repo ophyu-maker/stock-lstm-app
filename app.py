@@ -204,7 +204,7 @@ st.markdown(
     """
 This web app exposes an LSTM model trained on multiple stocks with technical indicators.
 
-**Model design (for the professor):**
+**Model design:**
 - Input: last **60 days** of price & indicators  
 - Target: **5-day ahead log return** of the closing price  
 - Features: OHLCV, daily return, MA(10/20), RSI, MACD, ATR, OBV  
@@ -250,6 +250,7 @@ with tab_info:
    - Inspect the price chart with a 5-day price path.
 3. Go to the **Training & Performance** tab to:
    - See training vs validation loss curves.
+   - Explore prediction diagnostics, including actual vs. predicted returns, residual patterns, and error-volatility relationships.
    - View the MAE/RMSE summary table across tickers (if provided).
 
 ### Notes
