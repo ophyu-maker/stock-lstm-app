@@ -47,15 +47,14 @@ class LSTMRegression(nn.Module):
 # TECHNICAL INDICATORS
 # ======================
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """Add technical indicators. Assumes columns:
+    date, open, high, low, close, volume
+    """
     df = df.copy()
 
-    # Ensure correct dtypes
-    df["close"] = pd.to_numeric(df["close"], errors="coerce")
-    df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
-    df["high"] = pd.to_numeric(df["high"], errors="coerce")
-    df["low"] = pd.to_numeric(df["low"], errors="coerce")
-
-    df = df.dropna(subset=["close", "volume", "high", "low"])
+    # Ensure numeric dtypes for calculations
+    for col in ["close", "volume", "high", "low"]:
+        df[col] = df[col].astype(float)
 
     # Simple daily return
     df["return"] = df["close"].pct_change()
@@ -81,11 +80,10 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ATR(14)
     df["ATR"] = (df["high"] - df["low"]).rolling(14).mean()
 
-    # OBV using numpy arrays (avoids ambiguous Series truth values)
+    # OBV using numpy arrays (avoids ambiguous Series operations)
     obv = [0]
     close_vals = df["close"].values
     vol_vals = df["volume"].values
-
     for i in range(1, len(close_vals)):
         if close_vals[i] > close_vals[i - 1]:
             obv.append(obv[-1] + vol_vals[i])
@@ -93,19 +91,12 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
             obv.append(obv[-1] - vol_vals[i])
         else:
             obv.append(obv[-1])
-
     df["OBV"] = obv
 
+    # Drop initial NaNs from rolling windows but keep date
     df = df.dropna().reset_index(drop=True)
 
-    # Make sure we have a 'date' column
-    if "Date" in df.columns:
-        df.rename(columns={"Date": "date"}, inplace=True)
-    elif "index" in df.columns:
-        df.rename(columns={"index": "date"}, inplace=True)
-
     return df
-
 
 # ======================
 # HELPERS
@@ -188,8 +179,6 @@ This web app exposes an LSTM model trained on multiple stocks with technical ind
 - Input: last **60 days** of price & indicators  
 - Target: **5-day ahead log return** of the closing price  
 - Features: OHLCV, daily return, MA(10/20), RSI, MACD, ATR, OBV  
-
-Use the tabs below to switch between **Instructions**, **Training & Performance**, and **Prediction**.
 """
 )
 
@@ -202,8 +191,10 @@ with st.sidebar:
     start_dt = end_dt - timedelta(days=365 * years_back)
     st.caption("Predictions are for ~5 trading days ahead based on the latest available data.")
 
-# Tabs
-tab_pred, tab_train, tab_info = st.tabs([ "ℹ️ Instructions","📈 Prediction", "📉 Training & Performance"])
+# Tabs in the desired order: Instructions -> Training & Performance -> Prediction
+tab_info, tab_train, tab_pred = st.tabs(
+    ["ℹ️ Instructions", "📉 Training & Performance", "📈 Prediction"]
+)
 
 # ======================
 # TAB 1: INSTRUCTIONS
@@ -223,15 +214,14 @@ with tab_info:
 
 ### How to use it
 
-1. **Select a ticker** in the sidebar (AAPL, MSFT, AMZN).
-2. Choose the **history window** (number of years of past data to load).
-3. Go to the **Prediction** tab:
+1. In the sidebar, select a **ticker** and **history window** (how many years of data to load).
+2. Go to the **Prediction** tab:
    - Review recent historical prices in the table.
    - See the model’s predicted 5-day return and future price.
    - Inspect the price chart with the forecast point appended.
-4. Go to the **Training & Performance** tab:
+3. Go to the **Training & Performance** tab:
    - View the **training vs validation loss curves** for the selected ticker.
-   - View the **MAE/RMSE summary table** (if provided from training notebook).
+   - View the **MAE/RMSE summary table** (if provided from the training notebook).
 
 ### Notes for evaluation
 
@@ -241,9 +231,10 @@ with tab_info:
   - Past history display
   - Training/validation curves
   - Additional figures/tables summarizing results
-- All models and scalers were pre-trained offline in a Colab notebook and loaded here.
+- All models and scalers were pre-trained offline in a Jupyter/Colab notebook and loaded here.
 """
     )
+
 # ======================
 # TAB 2: TRAINING & PERFORMANCE
 # ======================
@@ -282,7 +273,11 @@ with tab_train:
         results_df = pd.read_csv(results_path)
         st.dataframe(results_df)
     else:
-        st.info("Summary results table not found. You can generate it from the training notebook as 'artifacts/results_summary.csv'.")
+        st.info(
+            "Summary results table not found. "
+            "You can generate it from the training notebook as 'artifacts/results_summary.csv'."
+        )
+
 # ======================
 # TAB 3: PREDICTION
 # ======================
@@ -333,7 +328,11 @@ with tab_pred:
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Last close", f"${last_price:,.2f}", f"as of {last_date.date()}")
                     col2.metric("Predicted 5-day return", f"{pred_pct_return_5d:,.2f}%")
-                    col3.metric("Predicted price in ~5 days", f"${pred_price_5d:,.2f}", f"by {horizon_date.date()}")
+                    col3.metric(
+                        "Predicted price in ~5 days",
+                        f"${pred_price_5d:,.2f}",
+                        f"by {horizon_date.date()}",
+                    )
 
                     st.markdown("### Price history and 5-day forecast")
 
@@ -342,4 +341,3 @@ with tab_pred:
                     plot_df.loc[horizon_date, "close_forecast"] = pred_price_5d
 
                     st.line_chart(plot_df)
-
