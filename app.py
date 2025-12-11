@@ -309,7 +309,7 @@ with tab_train:
 with tab_pred:
     st.subheader(f"Prediction for {ticker}")
 
-    # Load price data safely
+    # Load price data using the safe loader
     try:
         with st.spinner(f"Downloading price data for {ticker}..."):
             df_raw = load_price_data_v2(ticker, start_dt, end_dt)
@@ -331,40 +331,44 @@ with tab_pred:
         st.warning("Not enough data after adding indicators for this history window.")
         st.stop()
 
-    # Load model & scaler
+    input_size = len(FEATURE_COLS)
+
+    # Load model + scaler
     try:
         with st.spinner("Loading trained LSTM model and scaler..."):
-            model, scaler = load_model_and_scaler(ticker, len(FEATURE_COLS))
+            model, scaler = load_model_and_scaler(ticker, input_size)
     except FileNotFoundError as e:
         st.error(str(e))
         st.stop()
 
-    # Build prediction sequence
+    # Build last sequence
     X_seq, meta = build_last_sequence(df_ind, scaler, SEQ_LEN)
-    if X_seq is None:
-        st.warning("Not enough rows to build the 60-day LSTM input sequence.")
+    if X_seq is None or meta is None:
+        st.warning("Not enough rows to build a full 60-day sequence.")
         st.stop()
 
     last_log_close, last_date, last_price = meta
 
-    # Predict 5-day ahead return + price
+    # Predict
     with st.spinner("Predicting 5-day ahead return and price..."):
-        pred_return_5d, pred_price_5d = predict_5day_price(model, X_seq, last_log_close)
+        pred_return_5d, pred_price_5d = predict_5day_price(
+            model, X_seq, last_log_close
+        )
 
+    # Convert to percent & horizon date
     pred_pct_return_5d = (np.exp(pred_return_5d) - 1) * 100
     horizon_date = last_date + pd.Timedelta(days=5)
 
-    # Safe numbers
+    # Safe scalars
     last_price_float = float(last_price)
-    pred_price_float = float(pred_price_5d)
     pred_ret_float = float(pred_pct_return_5d)
+    pred_price_float = float(pred_price_5d)
 
-    # Convert dates cleanly
     last_date_str = str(pd.to_datetime(last_date).date())
     horizon_date_str = str(pd.to_datetime(horizon_date).date())
 
-    # ===== Forecast daily path =====
-    daily_log_ret = pred_return_5d / 5
+    # ========== 5-day daily path ==========
+    daily_log_ret = pred_return_5d / 5.0
     horizon_dates = [last_date + pd.Timedelta(days=i) for i in range(1, 6)]
     forecast_prices = [
         last_price_float * float(np.exp(daily_log_ret * i))
@@ -373,63 +377,91 @@ with tab_pred:
 
     # ===== Metrics =====
     col1, col2, col3 = st.columns(3)
-    col1.metric("Last close", f"${last_price_float:,.2f}", f"as of {last_date_str}")
-    col2.metric("Predicted 5-day return", f"{pred_ret_float:,.2f}%")
-    col3.metric("Predicted price (~5 days)", f"${pred_price_float:,.2f}", f"by {horizon_date_str}")
+    col1.metric(
+        "Last close",
+        f"${last_price_float:,.2f}",
+        f"as of {last_date_str}",
+    )
+    col2.metric(
+        "Predicted 5-day return",
+        f"{pred_ret_float:,.2f}%",
+    )
+    col3.metric(
+        "Predicted price in ~5 days",
+        f"${pred_price_float:,.2f}",
+        f"by {horizon_date_str}",
+    )
 
-    # ===== Day-by-day table =====
-    st.markdown("#### Approximate day-by-day forecast (equal daily return assumption)")
-    forecast_table = pd.DataFrame({
-        "date": [d.date() for d in horizon_dates],
-        "predicted_price": forecast_prices
-    })
+    # ===== Day-by-day forecast table =====
+    st.markdown("#### Approximate day-by-day forecast (equal daily returns assumption)")
+    forecast_table = pd.DataFrame(
+        {
+            "date": [d.date() for d in horizon_dates],
+            "predicted_price": forecast_prices,
+        }
+    )
     st.dataframe(forecast_table)
 
     # ============================================================
-    # PRICE HISTORY + FORECAST CHART  (FIXED)
+    # PRICE HISTORY + 5-DAY FORECAST CHART  (FIXED)
     # ============================================================
     st.markdown("### Price history and 5-day forecast")
 
-    # ---- Last 5 historical closes (clean) ----
+    # ---- Last 5 historical closes ----
     hist_last5 = df_ind[["date", "close"]].copy().tail(5)
-    hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.normalize()
-    hist_last5.rename(columns={"close": "price"}, inplace=True)
-    hist_last5["series"] = "History (close)"
 
-    # ---- Next 5 forecast points ----
-    forecast_df = pd.DataFrame({
-        "date": [pd.to_datetime(d).normalize() for d in horizon_dates],
-        "price": forecast_prices,
-        "series": ["Forecast"] * 5,
-    })
+    if hist_last5.empty:
+        st.info("No historical prices available for the last 5 days.")
+    else:
+        hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.normalize()
+        hist_last5.rename(columns={"close": "price"}, inplace=True)
+        hist_last5["price"] = hist_last5["price"].astype(float)
+        hist_last5["series"] = "History (close)"
 
-    # Combine
-    plot_df = pd.concat([hist_last5, forecast_df], ignore_index=True)
-
-    # Ensure datetime formatting
-    plot_df["date"] = pd.to_datetime(plot_df["date"])
-
-    # ===== Altair chart (fixed daily x-axis) =====
-    chart = (
-        alt.Chart(plot_df)
-        .mark_line(point=True)
-        .encode(
-            x=alt.X(
-                "date:T",
-                title="Date",
-                axis=alt.Axis(format="%b %d")
-            ),
-            y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
-            color=alt.Color("series:N", title="Series"),
-            tooltip=["date:T", "series:N", "price:Q"]
+        # ---- Next 5 forecast prices ----
+        forecast_df = pd.DataFrame(
+            {
+                "date": [pd.to_datetime(d).normalize() for d in horizon_dates],
+                "price": forecast_prices,
+                "series": ["Forecast"] * len(forecast_prices),
+            }
         )
-        .properties(height=350)
-    )
 
-    st.altair_chart(chart, use_container_width=True)
+        # Combine history + forecast
+        plot_df = pd.concat([hist_last5, forecast_df], ignore_index=True)
 
-    st.caption(
-        "History shows the last 5 closing prices. "
-        "Forecast shows the next 5 days assuming the 5-day log return "
-        "is distributed equally across the next 5 days."
-    )
+        # Make sure series is never null (avoids 'null' legend entry)
+        plot_df["series"] = plot_df["series"].fillna("History (close)")
+
+        # Ensure datetime type for Altair
+        plot_df["date"] = pd.to_datetime(plot_df["date"])
+
+        # Altair chart
+        chart = (
+            alt.Chart(plot_df)
+            .mark_line(point=True)
+            .encode(
+                x=alt.X(
+                    "date:T",
+                    title="Date",
+                    axis=alt.Axis(format="%b %d", labelAngle=-45),
+                ),
+                y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
+                color=alt.Color(
+                    "series:N",
+                    title="Series",
+                    # Fix legend order just in case
+                    sort=["History (close)", "Forecast"],
+                ),
+                tooltip=["date:T", "series:N", "price:Q"],
+            )
+            .properties(height=350)
+        )
+
+        st.altair_chart(chart, use_container_width=True)
+
+        st.caption(
+            "History shows the last 5 closing prices. "
+            "Forecast shows an approximate 5-day price path, assuming the 5-day "
+            "log return is distributed equally across the next 5 days."
+        )
