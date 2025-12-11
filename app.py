@@ -338,12 +338,10 @@ with tab_pred:
                     horizon_date = last_date + pd.Timedelta(days=5)
 
                     # ---- Safe scalars for formatting ----
-                    # last price & predicted values as plain floats
                     last_price_float = float(np.asarray(last_price).reshape(-1)[0])
                     pred_ret_float = float(np.asarray(pred_pct_return_5d).reshape(-1)[0])
                     pred_price_float = float(np.asarray(pred_price_5d).reshape(-1)[0])
 
-                    # dates as strings
                     try:
                         last_date_str = str(pd.to_datetime(last_date).date())
                     except Exception:
@@ -373,8 +371,20 @@ with tab_pred:
 
                     st.markdown("### Price history and 5-day forecast")
 
-                    plot_df = df_ind[["date", "close"]].copy()
-                    plot_df.set_index("date", inplace=True)
-                    plot_df.loc[horizon_date, "close_forecast"] = pred_price_float
+                    # ---- Build clean DataFrame for chart ----
+                    # history
+                    hist_df = df_ind[["date", "close"]].copy()
+                    hist_df["forecast"] = np.nan
 
-                    st.line_chart(plot_df)
+                    # forecast row
+                    extra_row = pd.DataFrame({
+                        "date": [horizon_date],
+                        "close": [np.nan],
+                        "forecast": [pred_price_float],
+                    })
+
+                    plot_df = pd.concat([hist_df, extra_row], ignore_index=True)
+                    plot_df.set_index("date", inplace=True)
+
+                    # only numeric columns
+                    st.line_chart(plot_df[["close", "forecast"]])
