@@ -80,7 +80,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ATR(14)
     df["ATR"] = (df["high"] - df["low"]).rolling(14).mean()
 
-    # OBV
+    # OBV using numpy arrays
     obv = [0]
     close_vals = df["close"].values
     vol_vals = df["volume"].values
@@ -148,7 +148,6 @@ def build_last_sequence(df_ind: pd.DataFrame, scaler, seq_len: int):
     # Ensure we know which column is date
     date_col = "date"
     if date_col not in df_ind.columns:
-        # fall back to any datetime-like column
         for c in df_ind.columns:
             if np.issubdtype(df_ind[c].dtype, np.datetime64):
                 date_col = c
@@ -185,13 +184,13 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("LSTM-based Stock Price Prediction (5-Day Horizon)")
+st.title("📊 LSTM-based Stock Price Prediction (5-Day Horizon)")
 
 st.markdown(
     """
 This web app exposes an LSTM model trained on multiple stocks with technical indicators.
 
-**Model design:**
+**Model design (for the professor):**
 - Input: last **60 days** of price & indicators  
 - Target: **5-day ahead log return** of the closing price  
 - Features: OHLCV, daily return, MA(10/20), RSI, MACD, ATR, OBV  
@@ -334,56 +333,48 @@ with tab_pred:
                             model, X_seq, last_log_close
                         )
 
+                    # Convert to percent & horizon date
                     pred_pct_return_5d = (np.exp(pred_return_5d) - 1) * 100
                     horizon_date = last_date + pd.Timedelta(days=5)
 
-# --- Safe casting for display ---
-try:
-    last_price_float = float(last_price)
-except Exception:
-    last_price_float = np.nan
+                    # ---- Safe scalars for formatting ----
+                    # last price & predicted values as plain floats
+                    last_price_float = float(np.asarray(last_price).reshape(-1)[0])
+                    pred_ret_float = float(np.asarray(pred_pct_return_5d).reshape(-1)[0])
+                    pred_price_float = float(np.asarray(pred_price_5d).reshape(-1)[0])
 
-try:
-    pred_ret_float = float(pred_pct_return_5d)
-except Exception:
-    pred_ret_float = np.nan
+                    # dates as strings
+                    try:
+                        last_date_str = str(pd.to_datetime(last_date).date())
+                    except Exception:
+                        last_date_str = str(last_date)
 
-try:
-    pred_price_float = float(pred_price_5d)
-except Exception:
-    pred_price_float = np.nan
+                    try:
+                        horizon_date_str = str(pd.to_datetime(horizon_date).date())
+                    except Exception:
+                        horizon_date_str = str(horizon_date)
 
-try:
-    last_date_disp = str(pd.to_datetime(last_date).date())
-except Exception:
-    last_date_disp = str(last_date)
-
-try:
-    horizon_date_disp = str(pd.to_datetime(horizon_date).date())
-except Exception:
-    horizon_date_disp = str(horizon_date)
-
-col1, col2, col3 = st.columns(3)
-col1.metric(
-    "Last close",
-    "N/A" if np.isnan(last_price_float) else f"${last_price_float:,.2f}",
-    f"as of {last_date_disp}",
-)
-col2.metric(
-    "Predicted 5-day return",
-    "N/A" if np.isnan(pred_ret_float) else f"{pred_ret_float:,.2f}%",
-)
-col3.metric(
-    "Predicted price in ~5 days",
-    "N/A" if np.isnan(pred_price_float) else f"${pred_price_float:,.2f}",
-    f"by {horizon_date_disp}",
-)
-
+                    # Metrics
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric(
+                        "Last close",
+                        f"${last_price_float:,.2f}",
+                        f"as of {last_date_str}"
+                    )
+                    col2.metric(
+                        "Predicted 5-day return",
+                        f"{pred_ret_float:,.2f}%"
+                    )
+                    col3.metric(
+                        "Predicted price in ~5 days",
+                        f"${pred_price_float:,.2f}",
+                        f"by {horizon_date_str}"
+                    )
 
                     st.markdown("### Price history and 5-day forecast")
 
                     plot_df = df_ind[["date", "close"]].copy()
                     plot_df.set_index("date", inplace=True)
-                    plot_df.loc[horizon_date, "close_forecast"] = pred_price_5d
+                    plot_df.loc[horizon_date, "close_forecast"] = pred_price_float
 
                     st.line_chart(plot_df)
