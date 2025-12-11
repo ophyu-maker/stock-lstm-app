@@ -315,7 +315,7 @@ with tab_train:
     # ------------------------------
     # 3. Actual vs Predicted Line Plot
     # ------------------------------
-    st.subheader("Actual vs Predicted 5-Day Returns")
+    st.subheader(f"Actual vs Predicted 5-Day Returns – {ticker}")
 
     line_df = pd.DataFrame({
         "date": dates,
@@ -333,7 +333,8 @@ with tab_train:
     # ------------------------------
     # 4. Residual Plot
     # ------------------------------
-    st.subheader("Residuals Over Test Set (Pred − Actual)")
+    st.subheader(f"Residuals Over Test Set (Pred − Actual) – {ticker}")
+ 
 
     res_df = pd.DataFrame({
         "index": range(len(residuals)),
@@ -350,8 +351,8 @@ with tab_train:
     # ------------------------------
     # 5. Error vs Volatility Scatter
     # ------------------------------
-    st.subheader("Error vs Volatility")
-
+    st.subheader(f"Error vs Volatility – {ticker}")
+ 
     scatter_df = pd.DataFrame({
         "|Actual Return|": actual_abs,
         "|Error|": abs_error
