@@ -251,7 +251,7 @@ with tab_info:
 3. Go to the **Training & Performance** tab to:
    - See training vs validation loss curves.
    - Explore prediction diagnostics, including actual vs. predicted returns, residual patterns, and error-volatility relationships.
-   - View the MAE/RMSE summary table across tickers (if provided).
+   - View the MAE/RMSE summary table across tickers.
 
 ### Notes
 
