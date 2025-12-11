@@ -9,9 +9,7 @@ import streamlit as st
 import torch
 from torch import nn
 import yfinance as yf
-
 import altair as alt
-
 
 # ======================
 # GLOBAL SETTINGS
@@ -236,7 +234,7 @@ with tab_info:
 2. Go to the **Prediction** tab to:
    - Review recent historical prices.
    - See the model’s 5-day-ahead return and future price.
-   - Inspect the price chart with the forecast point appended.
+   - Inspect the price chart with a 5-day price path.
 3. Go to the **Training & Performance** tab to:
    - See training vs validation loss curves.
    - View the MAE/RMSE summary table across tickers (if provided).
@@ -330,7 +328,7 @@ with tab_pred:
                 else:
                     last_log_close, last_date, last_price = meta
 
-                    # Predict 5-day log return and price
+                    # Predict
                     with st.spinner("Predicting 5-day ahead return and price..."):
                         pred_return_5d, pred_price_5d = predict_5day_price(
                             model, X_seq, last_log_close
@@ -355,10 +353,8 @@ with tab_pred:
                     except Exception:
                         horizon_date_str = str(horizon_date)
 
-                    # ========== NEW: 5-day daily path ==========
-                    # model gives 5-day log return r_5; assume equal log return each day
+                    # ========== 5-day daily path ==========
                     daily_log_ret = pred_return_5d / 5.0
-
                     horizon_dates = [
                         last_date + pd.Timedelta(days=i) for i in range(1, 6)
                     ]
@@ -387,42 +383,42 @@ with tab_pred:
                     # 5-day forecast table
                     st.markdown("#### Approximate day-by-day forecast (equal daily returns assumption)")
                     forecast_table = pd.DataFrame({
-                        "date": horizon_dates,
+                        "date": [d.date() for d in horizon_dates],
                         "predicted_price": forecast_prices
                     })
                     st.dataframe(forecast_table)
 
                     st.markdown("### Price history and 5-day forecast")
 
-                    # ---- Build data for last 5 historical closes ----
+                    # ---- LAST 5 CLOSES ----
                     hist_last5 = df_ind[["date", "close"]].copy().tail(5)
-                    hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.date
+                    hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.normalize()
                     hist_last5.rename(columns={"close": "price"}, inplace=True)
                     hist_last5["series"] = "History (close)"
 
-                    # ---- Build data for next 5 forecast days ----
-                    forecast_dates = [d.date() for d in horizon_dates]  # convert to plain date
+                    # ---- NEXT 5 FORECAST PRICES ----
                     forecast_df = pd.DataFrame({
-                        "date": forecast_dates,
+                        "date": [pd.to_datetime(d).normalize() for d in horizon_dates],
                         "price": forecast_prices,
                         "series": ["Forecast"] * len(forecast_prices),
                     })
 
-                    # Combine history + forecast
                     plot_df = pd.concat([hist_last5, forecast_df], ignore_index=True)
 
-                    # ---- Altair line chart with daily ticks ----
+                    # Altair chart: daily ticks, clear legend
                     chart = (
                         alt.Chart(plot_df)
                         .mark_line(point=True)
                         .encode(
-                            x=alt.X("date:T", title="Date"),
+                            x=alt.X("date:T",
+                                    title="Date",
+                                    axis=alt.Axis(format="%b %d", labelAngle=-45)),
                             y=alt.Y("price:Q", title="Price (USD)"),
                             color=alt.Color("series:N", title="Series"),
                             tooltip=["date:T", "series:N", "price:Q"],
-                                )
-                        .properties(height=350)
                         )
+                        .properties(height=350)
+                    )
 
                     st.altair_chart(chart, use_container_width=True)
 
@@ -431,6 +427,3 @@ with tab_pred:
                         "Forecast shows an approximate 5-day price path, "
                         "assuming the 5-day log return is distributed equally across the next 5 days."
                     )
-   
-
-
