@@ -52,7 +52,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    # Ensure numeric dtypes for calculations
+    # Ensure numeric for calculations
     for col in ["close", "volume", "high", "low"]:
         df[col] = df[col].astype(float)
 
@@ -80,7 +80,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ATR(14)
     df["ATR"] = (df["high"] - df["low"]).rolling(14).mean()
 
-    # OBV using numpy arrays (avoids ambiguous Series operations)
+    # OBV
     obv = [0]
     close_vals = df["close"].values
     vol_vals = df["volume"].values
@@ -93,7 +93,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
             obv.append(obv[-1])
     df["OBV"] = obv
 
-    # Drop initial NaNs from rolling windows but keep date
+    # Drop NaNs from rolling windows
     df = df.dropna().reset_index(drop=True)
 
     return df
@@ -103,11 +103,16 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 # ======================
 @st.cache_data
 def load_price_data(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
+    """Download OHLCV data and make sure there is a 'date' column."""
     data = yf.download(ticker, start=start_dt, end=end_dt)
     data = data.dropna()
     data = data.rename(columns=str.lower)  # open, high, low, close, adj close, volume
-    data.reset_index(inplace=True)
-    data.rename(columns={"date": "date"}, inplace=True)
+    data.reset_index(inplace=True)        # index -> column (usually 'Date')
+    # Normalise to 'date'
+    if "Date" in data.columns:
+        data.rename(columns={"Date": "date"}, inplace=True)
+    elif "date" not in data.columns and "index" in data.columns:
+        data.rename(columns={"index": "date"}, inplace=True)
     return data
 
 @st.cache_resource
@@ -134,10 +139,21 @@ def load_model_and_scaler(ticker: str, input_size: int):
     return model, scaler
 
 def build_last_sequence(df_ind: pd.DataFrame, scaler, seq_len: int):
+    """Build last 60-day sequence and fetch last date/price."""
     if len(df_ind) < seq_len:
         return None, None
 
     df_ind = df_ind.copy()
+
+    # Ensure we know which column is date
+    date_col = "date"
+    if date_col not in df_ind.columns:
+        # fall back to any datetime-like column
+        for c in df_ind.columns:
+            if np.issubdtype(df_ind[c].dtype, np.datetime64):
+                date_col = c
+                break
+
     df_ind["log_close"] = np.log(df_ind["close"])
 
     recent = df_ind.iloc[-seq_len:]
@@ -146,7 +162,7 @@ def build_last_sequence(df_ind: pd.DataFrame, scaler, seq_len: int):
     X_seq = np.expand_dims(X, axis=0)  # (1, seq_len, n_features)
 
     last_log_close = recent["log_close"].iloc[-1]
-    last_date = recent["date"].iloc[-1]
+    last_date = recent[date_col].iloc[-1]
     last_price = recent["close"].iloc[-1]
 
     return X_seq, (last_log_close, last_date, last_price)
@@ -169,7 +185,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 LSTM-based Stock Price Prediction (5-Day Horizon)")
+st.title("LSTM-based Stock Price Prediction (5-Day Horizon)")
 
 st.markdown(
     """
@@ -191,7 +207,7 @@ with st.sidebar:
     start_dt = end_dt - timedelta(days=365 * years_back)
     st.caption("Predictions are for ~5 trading days ahead based on the latest available data.")
 
-# Tabs in the desired order: Instructions -> Training & Performance -> Prediction
+# Tabs in order: Instructions -> Training & Performance -> Prediction
 tab_info, tab_train, tab_pred = st.tabs(
     ["ℹ️ Instructions", "📉 Training & Performance", "📈 Prediction"]
 )
@@ -214,24 +230,20 @@ with tab_info:
 
 ### How to use it
 
-1. In the sidebar, select a **ticker** and **history window** (how many years of data to load).
-2. Go to the **Prediction** tab:
-   - Review recent historical prices in the table.
-   - See the model’s predicted 5-day return and future price.
+1. In the sidebar, select a **ticker** and **history window**.
+2. Go to the **Prediction** tab to:
+   - Review recent historical prices.
+   - See the model’s 5-day-ahead return and future price.
    - Inspect the price chart with the forecast point appended.
-3. Go to the **Training & Performance** tab:
-   - View the **training vs validation loss curves** for the selected ticker.
-   - View the **MAE/RMSE summary table** (if provided from the training notebook).
+3. Go to the **Training & Performance** tab to:
+   - See training vs validation loss curves.
+   - View the MAE/RMSE summary table across tickers (if provided).
 
-### Notes for evaluation
+### Notes
 
-- This interface is designed for the course project requirement:
-  - Web-based interactive app
-  - Ticker input and visible predictions
-  - Past history display
-  - Training/validation curves
-  - Additional figures/tables summarizing results
-- All models and scalers were pre-trained offline in a Jupyter/Colab notebook and loaded here.
+- Models and scalers are pre-trained offline and loaded here.
+- This interface is designed to meet the course project requirements
+  (interactive web app, history, prediction, training curves, and tables).
 """
     )
 
@@ -311,7 +323,7 @@ with tab_pred:
             else:
                 # Build last sequence
                 X_seq, meta = build_last_sequence(df_ind, scaler, SEQ_LEN)
-                if X_seq is None:
+                if X_seq is None or meta is None:
                     st.warning("Not enough rows to build a full 60-day sequence.")
                 else:
                     last_log_close, last_date, last_price = meta
