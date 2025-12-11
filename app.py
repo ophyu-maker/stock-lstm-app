@@ -408,11 +408,17 @@ with tab_pred:
 
                 st.markdown("### Price history and 5-day forecast")
 
-                # ---- LAST 5 CLOSES ----
-                hist_last5 = df_ind[["date", "close"]].copy().tail(5)
-                hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.normalize()
-                hist_last5.rename(columns={"close": "price"}, inplace=True)
-                hist_last5["series"] = "History (close)"
+                # ---- LAST 5 HISTORICAL CLOSES (build clean df) ----
+                last5 = df_ind.tail(5).copy()
+
+                hist_dates = pd.to_datetime(last5["date"]).dt.normalize()
+                hist_prices = last5["close"].astype(float).values
+
+                hist_df = pd.DataFrame({
+                    "date": hist_dates,
+                    "price": hist_prices,
+                    "series": ["History (close)"] * len(hist_prices),
+                })
 
                 # ---- NEXT 5 FORECAST PRICES ----
                 forecast_df = pd.DataFrame({
@@ -421,7 +427,8 @@ with tab_pred:
                     "series": ["Forecast"] * len(forecast_prices),
                 })
 
-                plot_df = pd.concat([hist_last5, forecast_df], ignore_index=True)
+                # Combine history + forecast
+                plot_df = pd.concat([hist_df, forecast_df], ignore_index=True)
 
                 # Altair chart: daily ticks, clear legend
                 chart = (
