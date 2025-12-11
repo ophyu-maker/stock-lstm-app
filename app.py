@@ -49,6 +49,15 @@ class LSTMRegression(nn.Module):
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
+    # Ensure correct dtypes
+    df["close"] = pd.to_numeric(df["close"], errors="coerce")
+    df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+    df["high"] = pd.to_numeric(df["high"], errors="coerce")
+    df["low"] = pd.to_numeric(df["low"], errors="coerce")
+
+    df = df.dropna(subset=["close", "volume", "high", "low"])
+
+    # Simple daily return
     df["return"] = df["close"].pct_change()
 
     # Moving averages
@@ -72,23 +81,31 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ATR(14)
     df["ATR"] = (df["high"] - df["low"]).rolling(14).mean()
 
-    # OBV
+    # OBV using numpy arrays (avoids ambiguous Series truth values)
     obv = [0]
-    for i in range(1, len(df)):
-        if df["close"].iloc[i] > df["close"].iloc[i - 1]:
-            obv.append(obv[-1] + df["volume"].iloc[i])
-        elif df["close"].iloc[i] < df["close"].iloc[i - 1]:
-            obv.append(obv[-1] - df["volume"].iloc[i])
+    close_vals = df["close"].values
+    vol_vals = df["volume"].values
+
+    for i in range(1, len(close_vals)):
+        if close_vals[i] > close_vals[i - 1]:
+            obv.append(obv[-1] + vol_vals[i])
+        elif close_vals[i] < close_vals[i - 1]:
+            obv.append(obv[-1] - vol_vals[i])
         else:
             obv.append(obv[-1])
+
     df["OBV"] = obv
 
-    df = df.dropna().reset_index()
+    df = df.dropna().reset_index(drop=True)
+
+    # Make sure we have a 'date' column
     if "Date" in df.columns:
         df.rename(columns={"Date": "date"}, inplace=True)
     elif "index" in df.columns:
         df.rename(columns={"index": "date"}, inplace=True)
+
     return df
+
 
 # ======================
 # HELPERS
@@ -167,12 +184,12 @@ st.markdown(
     """
 This web app exposes an LSTM model trained on multiple stocks with technical indicators.
 
-**Model design (for the professor):**
+**Model design:**
 - Input: last **60 days** of price & indicators  
 - Target: **5-day ahead log return** of the closing price  
 - Features: OHLCV, daily return, MA(10/20), RSI, MACD, ATR, OBV  
 
-Use the tabs below to switch between **Prediction**, **Training & Performance**, and **Instructions**.
+Use the tabs below to switch between **Instructions**, **Training & Performance**, and **Prediction**.
 """
 )
 
@@ -186,10 +203,88 @@ with st.sidebar:
     st.caption("Predictions are for ~5 trading days ahead based on the latest available data.")
 
 # Tabs
-tab_pred, tab_train, tab_info = st.tabs(["📈 Prediction", "📉 Training & Performance", "ℹ️ Instructions"])
+tab_pred, tab_train, tab_info = st.tabs([ "ℹ️ Instructions","📈 Prediction", "📉 Training & Performance"])
 
 # ======================
-# TAB 1: PREDICTION
+# TAB 1: INSTRUCTIONS
+# ======================
+with tab_info:
+    st.subheader("User Instructions")
+
+    st.markdown(
+        """
+### What this app does
+
+- Uses an LSTM regression model trained on **AAPL, MSFT, and AMZN**.
+- The model takes the last **60 days** of prices and technical indicators and predicts the **5-day ahead log return**.
+- The predicted log return is converted to:
+  - a **percentage return**, and  
+  - an **implied future price** 5 days from the last available date.
+
+### How to use it
+
+1. **Select a ticker** in the sidebar (AAPL, MSFT, AMZN).
+2. Choose the **history window** (number of years of past data to load).
+3. Go to the **Prediction** tab:
+   - Review recent historical prices in the table.
+   - See the model’s predicted 5-day return and future price.
+   - Inspect the price chart with the forecast point appended.
+4. Go to the **Training & Performance** tab:
+   - View the **training vs validation loss curves** for the selected ticker.
+   - View the **MAE/RMSE summary table** (if provided from training notebook).
+
+### Notes for evaluation
+
+- This interface is designed for the course project requirement:
+  - Web-based interactive app
+  - Ticker input and visible predictions
+  - Past history display
+  - Training/validation curves
+  - Additional figures/tables summarizing results
+- All models and scalers were pre-trained offline in a Colab notebook and loaded here.
+"""
+
+# ======================
+# TAB 2: TRAINING & PERFORMANCE
+# ======================
+with tab_train:
+    st.subheader(f"Training vs Validation Loss – {ticker}")
+
+    losses_path = f"artifacts/losses_{ticker}.pkl"
+    if os.path.exists(losses_path):
+        with open(losses_path, "rb") as f:
+            losses = pickle.load(f)
+        train_losses = losses.get("train_losses", [])
+        val_losses = losses.get("val_losses", [])
+
+        if len(train_losses) > 0 and len(val_losses) == len(train_losses):
+            epochs = list(range(1, len(train_losses) + 1))
+            loss_df = pd.DataFrame(
+                {
+                    "epoch": epochs,
+                    "train_loss": train_losses,
+                    "val_loss": val_losses,
+                }
+            ).set_index("epoch")
+
+            st.line_chart(loss_df)
+            st.caption("Lower validation loss over epochs indicates better generalization.")
+        else:
+            st.info("Loss data found but not in the expected format.")
+    else:
+        st.info("No saved training/validation curves for this ticker.")
+
+    st.markdown("---")
+    st.subheader("Overall LSTM Performance (All Tickers)")
+
+    results_path = "artifacts/results_summary.csv"
+    if os.path.exists(results_path):
+        results_df = pd.read_csv(results_path)
+        st.dataframe(results_df)
+    else:
+        st.info("Summary results table not found. You can generate it from the training notebook as 'artifacts/results_summary.csv'.")
+# ======================
+# TAB 3: PREDICTION
 # ======================
 with tab_pred:
     st.subheader(f"Prediction for {ticker}")
@@ -248,82 +343,4 @@ with tab_pred:
 
                     st.line_chart(plot_df)
 
-# ======================
-# TAB 2: TRAINING & PERFORMANCE
-# ======================
-with tab_train:
-    st.subheader(f"Training vs Validation Loss – {ticker}")
-
-    losses_path = f"artifacts/losses_{ticker}.pkl"
-    if os.path.exists(losses_path):
-        with open(losses_path, "rb") as f:
-            losses = pickle.load(f)
-        train_losses = losses.get("train_losses", [])
-        val_losses = losses.get("val_losses", [])
-
-        if len(train_losses) > 0 and len(val_losses) == len(train_losses):
-            epochs = list(range(1, len(train_losses) + 1))
-            loss_df = pd.DataFrame(
-                {
-                    "epoch": epochs,
-                    "train_loss": train_losses,
-                    "val_loss": val_losses,
-                }
-            ).set_index("epoch")
-
-            st.line_chart(loss_df)
-            st.caption("Lower validation loss over epochs indicates better generalization.")
-        else:
-            st.info("Loss data found but not in the expected format.")
-    else:
-        st.info("No saved training/validation curves for this ticker.")
-
-    st.markdown("---")
-    st.subheader("Overall LSTM Performance (All Tickers)")
-
-    results_path = "artifacts/results_summary.csv"
-    if os.path.exists(results_path):
-        results_df = pd.read_csv(results_path)
-        st.dataframe(results_df)
-    else:
-        st.info("Summary results table not found. You can generate it from the training notebook as 'artifacts/results_summary.csv'.")
-
-# ======================
-# TAB 3: INSTRUCTIONS
-# ======================
-with tab_info:
-    st.subheader("User Instructions")
-
-    st.markdown(
-        """
-### What this app does
-
-- Uses an LSTM regression model trained on **AAPL, MSFT, and AMZN**.
-- The model takes the last **60 days** of prices and technical indicators and predicts the **5-day ahead log return**.
-- The predicted log return is converted to:
-  - a **percentage return**, and  
-  - an **implied future price** 5 days from the last available date.
-
-### How to use it
-
-1. **Select a ticker** in the sidebar (AAPL, MSFT, AMZN).
-2. Choose the **history window** (number of years of past data to load).
-3. Go to the **Prediction** tab:
-   - Review recent historical prices in the table.
-   - See the model’s predicted 5-day return and future price.
-   - Inspect the price chart with the forecast point appended.
-4. Go to the **Training & Performance** tab:
-   - View the **training vs validation loss curves** for the selected ticker.
-   - View the **MAE/RMSE summary table** (if provided from training notebook).
-
-### Notes for evaluation
-
-- This interface is designed for the course project requirement:
-  - Web-based interactive app
-  - Ticker input and visible predictions
-  - Past history display
-  - Training/validation curves
-  - Additional figures/tables summarizing results
-- All models and scalers were pre-trained offline in a Colab notebook and loaded here.
-"""
     )
