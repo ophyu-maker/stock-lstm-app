@@ -402,8 +402,8 @@ with tab_pred:
     )
     st.dataframe(forecast_table)
 
-    # ============================================================
-    # PRICE HISTORY + 5-DAY FORECAST CHART  (FIXED)
+        # ============================================================
+    # PRICE HISTORY + 5-DAY FORECAST CHART
     # ============================================================
     st.markdown("### Price history and 5-day forecast")
 
@@ -413,55 +413,76 @@ with tab_pred:
     if hist_last5.empty:
         st.info("No historical prices available for the last 5 days.")
     else:
+        # Clean up history
         hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.normalize()
         hist_last5.rename(columns={"close": "price"}, inplace=True)
         hist_last5["price"] = hist_last5["price"].astype(float)
-        hist_last5["series"] = "History (close)"
 
         # ---- Next 5 forecast prices ----
         forecast_df = pd.DataFrame(
             {
                 "date": [pd.to_datetime(d).normalize() for d in horizon_dates],
                 "price": forecast_prices,
-                "series": ["Forecast"] * len(forecast_prices),
             }
         )
+        forecast_df["price"] = forecast_df["price"].astype(float)
 
-        # Combine history + forecast
-        plot_df = pd.concat([hist_last5, forecast_df], ignore_index=True)
+        # Ensure datetime for both
+        hist_last5["date"] = pd.to_datetime(hist_last5["date"])
+        forecast_df["date"] = pd.to_datetime(forecast_df["date"])
 
-        # Make sure series is never null (avoids 'null' legend entry)
-        plot_df["series"] = plot_df["series"].fillna("History (close)")
-
-        # Ensure datetime type for Altair
-        plot_df["date"] = pd.to_datetime(plot_df["date"])
-
-        # Altair chart
-        chart = (
-            alt.Chart(plot_df)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X(
-                    "date:T",
-                    title="Date",
-                    axis=alt.Axis(format="%b %d", labelAngle=-45),
-                ),
-                y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
-                color=alt.Color(
-                    "series:N",
-                    title="Series",
-                    # Fix legend order just in case
-                    sort=["History (close)", "Forecast"],
-                ),
-                tooltip=["date:T", "series:N", "price:Q"],
-            )
-            .properties(height=350)
+        # ---- Build layered Altair chart ----
+        base = alt.Chart().encode(
+            x=alt.X(
+                "date:T",
+                title="Date",
+                axis=alt.Axis(format="%b %d", labelAngle=-45),
+            ),
+            y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
         )
+
+        # History: darker blue
+        hist_chart = (
+            base
+            .mark_line(point=True, color="#1f77b4")
+            .encode(
+                tooltip=[
+                    alt.Tooltip("date:T", title="Date"),
+                    alt.Tooltip("price:Q", title="History close"),
+                ]
+            )
+            .transform_calculate(series='"History (close)"')
+            .transform_fold(["price"], as_=["value_name", "price"])
+            .properties(data=hist_last5)
+        )
+
+        # Forecast: lighter blue
+        forecast_chart = (
+            base
+            .mark_line(point=True, color="#7fbfff")
+            .encode(
+                tooltip=[
+                    alt.Tooltip("date:T", title="Date"),
+                    alt.Tooltip("price:Q", title="Forecast"),
+                ]
+            )
+            .transform_calculate(series='"Forecast"')
+            .transform_fold(["price"], as_=["value_name", "price"])
+            .properties(data=forecast_df)
+        )
+
+        chart = (hist_chart + forecast_chart).properties(height=350)
 
         st.altair_chart(chart, use_container_width=True)
 
+        st.markdown(
+            "<span style='color:#1f77b4'>■</span> History (last 5 closes) &nbsp;&nbsp; "
+            "<span style='color:#7fbfff'>■</span> Forecast (next 5 days)",
+            unsafe_allow_html=True,
+        )
+
         st.caption(
             "History shows the last 5 closing prices. "
-            "Forecast shows an approximate 5-day price path, assuming the 5-day "
-            "log return is distributed equally across the next 5 days."
+            "Forecast shows an approximate 5-day price path, assuming the "
+            "5-day log return is distributed equally across the next 5 days."
         )
