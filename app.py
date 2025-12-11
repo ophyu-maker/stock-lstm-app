@@ -243,7 +243,7 @@ with tab_info:
   - Additional figures/tables summarizing results
 - All models and scalers were pre-trained offline in a Colab notebook and loaded here.
 """
-
+    )
 # ======================
 # TAB 2: TRAINING & PERFORMANCE
 # ======================
@@ -343,4 +343,3 @@ with tab_pred:
 
                     st.line_chart(plot_df)
 
-    )
