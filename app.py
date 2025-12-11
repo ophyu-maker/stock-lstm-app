@@ -1,29 +1,30 @@
 # app.py
-import streamlit as st
-import yfinance as yf
-import numpy as np
-import pandas as pd
-import torch
-from torch import nn
+import os
 import pickle
 from datetime import date, timedelta
 
-# ==========
-# SETTINGS
-# ==========
-SEQ_LEN = 60
-DEVICE = torch.device("cpu")  # Streamlit Cloud: stay on CPU
+import numpy as np
+import pandas as pd
+import streamlit as st
+import torch
+from torch import nn
+import yfinance as yf
 
-TICKERS = ["AAPL", "MSFT", "AMZN"]   # the tickers you trained on
+# ======================
+# GLOBAL SETTINGS
+# ======================
+SEQ_LEN = 60
+DEVICE = torch.device("cpu")  # Streamlit Cloud: CPU only
+TICKERS = ["AAPL", "MSFT", "AMZN"]
 
 FEATURE_COLS = [
     "open", "high", "low", "close", "volume",
     "return", "ma_10", "ma_20", "RSI", "MACD", "ATR", "OBV"
 ]
 
-# ==========
-# MODEL DEF
-# ==========
+# ======================
+# MODEL DEFINITION
+# ======================
 class LSTMRegression(nn.Module):
     def __init__(self, input_size, hidden_size=64, num_layers=1, dropout=0.2):
         super().__init__()
@@ -42,15 +43,15 @@ class LSTMRegression(nn.Module):
         out = self.fc(out)      # (B, 1)
         return out
 
-# ==========
-# INDICATORS
-# ==========
+# ======================
+# TECHNICAL INDICATORS
+# ======================
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     df["return"] = df["close"].pct_change()
 
-    # MAs
+    # Moving averages
     df["ma_10"] = df["close"].rolling(window=10).mean()
     df["ma_20"] = df["close"].rolling(window=20).mean()
 
@@ -74,24 +75,24 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # OBV
     obv = [0]
     for i in range(1, len(df)):
-        if df["close"].iloc[i] > df["close"].iloc[i-1]:
+        if df["close"].iloc[i] > df["close"].iloc[i - 1]:
             obv.append(obv[-1] + df["volume"].iloc[i])
-        elif df["close"].iloc[i] < df["close"].iloc[i-1]:
+        elif df["close"].iloc[i] < df["close"].iloc[i - 1]:
             obv.append(obv[-1] - df["volume"].iloc[i])
         else:
             obv.append(obv[-1])
     df["OBV"] = obv
 
     df = df.dropna().reset_index()
-    df.rename(columns={"Date": "date"}, inplace=True, errors="ignore")
-    if "date" not in df.columns:
+    if "Date" in df.columns:
+        df.rename(columns={"Date": "date"}, inplace=True)
+    elif "index" in df.columns:
         df.rename(columns={"index": "date"}, inplace=True)
-
     return df
 
-# ==========
+# ======================
 # HELPERS
-# ==========
+# ======================
 @st.cache_data
 def load_price_data(ticker: str, start_dt: date, end_dt: date) -> pd.DataFrame:
     data = yf.download(ticker, start=start_dt, end=end_dt)
@@ -106,11 +107,16 @@ def load_model_and_scaler(ticker: str, input_size: int):
     model_path = f"models/lstm_{ticker}.pth"
     scaler_path = f"artifacts/scaler_{ticker}.pkl"
 
-    # load scaler
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    if not os.path.exists(scaler_path):
+        raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
+
+    # Load scaler
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
 
-    # load model
+    # Load model
     model = LSTMRegression(input_size=input_size)
     state_dict = torch.load(model_path, map_location=DEVICE)
     model.load_state_dict(state_dict)
@@ -120,14 +126,13 @@ def load_model_and_scaler(ticker: str, input_size: int):
     return model, scaler
 
 def build_last_sequence(df_ind: pd.DataFrame, scaler, seq_len: int):
-    # we assume df_ind already has indicators & no NaNs
     if len(df_ind) < seq_len:
         return None, None
 
     df_ind = df_ind.copy()
     df_ind["log_close"] = np.log(df_ind["close"])
 
-    recent = df_ind.iloc[-seq_len:]  # last seq_len rows
+    recent = df_ind.iloc[-seq_len:]
 
     X = scaler.transform(recent[FEATURE_COLS])
     X_seq = np.expand_dims(X, axis=0)  # (1, seq_len, n_features)
@@ -147,95 +152,178 @@ def predict_5day_price(model, X_seq, last_log_close):
     pred_price_5d = float(np.exp(pred_log_close_5d))
     return pred_return_5d, pred_price_5d
 
-# ==========
+# ======================
 # STREAMLIT UI
-# ==========
-st.set_page_config(page_title="LSTM Stock Prediction", page_icon="📊", layout="wide")
+# ======================
+st.set_page_config(
+    page_title="LSTM Stock Prediction",
+    page_icon="📊",
+    layout="wide"
+)
 
-st.title("📊 LSTM-based Stock Prediction (5-Day Horizon)")
+st.title("📊 LSTM-based Stock Price Prediction (5-Day Horizon)")
 
 st.markdown(
     """
-This app uses your **PyTorch LSTM model** with technical indicators to predict the
-**5-day ahead log return** and implied **future price** for selected stocks.
+This web app exposes an LSTM model trained on multiple stocks with technical indicators.
 
-The model was trained on historical data with:
-- Lookback window: **60 days**
-- Target: **5-day log return** of the closing price  
+**Model design (for the professor):**
+- Input: last **60 days** of price & indicators  
+- Target: **5-day ahead log return** of the closing price  
+- Features: OHLCV, daily return, MA(10/20), RSI, MACD, ATR, OBV  
+
+Use the tabs below to switch between **Prediction**, **Training & Performance**, and **Instructions**.
 """
 )
 
+# Sidebar controls
 with st.sidebar:
     st.header("Settings")
-
-    ticker = st.selectbox("Ticker", options=TICKERS, index=0)
-    years_back = st.slider("History window (years)", 1, 5, 3)
+    ticker = st.selectbox("Choose ticker", TICKERS, index=0)
+    years_back = st.slider("History window (years)", min_value=1, max_value=5, value=3)
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=365 * years_back)
+    st.caption("Predictions are for ~5 trading days ahead based on the latest available data.")
 
-    st.caption("Note: model expects the same features & scaling as used in training.")
+# Tabs
+tab_pred, tab_train, tab_info = st.tabs(["📈 Prediction", "📉 Training & Performance", "ℹ️ Instructions"])
 
-# === Load data ===
-with st.spinner(f"Downloading data for {ticker}..."):
-    df_raw = load_price_data(ticker, start_dt, end_dt)
+# ======================
+# TAB 1: PREDICTION
+# ======================
+with tab_pred:
+    st.subheader(f"Prediction for {ticker}")
 
-if df_raw.empty:
-    st.error("No data returned. Try a different date range.")
-    st.stop()
+    # Load price data
+    with st.spinner(f"Downloading price data for {ticker}..."):
+        df_raw = load_price_data(ticker, start_dt, end_dt)
 
-st.subheader(f"Recent data for {ticker}")
-st.dataframe(df_raw.tail(10))
+    if df_raw.empty:
+        st.error("No data returned. Try a different date range.")
+    else:
+        st.markdown("**Recent historical data**")
+        st.dataframe(df_raw.tail(10))
 
-# === Indicators ===
-df_ind = add_indicators(df_raw)
+        # Add indicators
+        df_ind = add_indicators(df_raw)
 
-if len(df_ind) < SEQ_LEN:
-    st.warning("Not enough data after adding indicators for the chosen date range.")
-    st.stop()
+        if len(df_ind) < SEQ_LEN:
+            st.warning("Not enough data after adding indicators for this history window.")
+        else:
+            input_size = len(FEATURE_COLS)
 
-input_size = len(FEATURE_COLS)
+            # Load model + scaler
+            try:
+                with st.spinner("Loading trained LSTM model and scaler..."):
+                    model, scaler = load_model_and_scaler(ticker, input_size)
+            except FileNotFoundError as e:
+                st.error(str(e))
+            else:
+                # Build last sequence
+                X_seq, meta = build_last_sequence(df_ind, scaler, SEQ_LEN)
+                if X_seq is None:
+                    st.warning("Not enough rows to build a full 60-day sequence.")
+                else:
+                    last_log_close, last_date, last_price = meta
 
-# === Load model + scaler ===
-with st.spinner("Loading model & scaler..."):
-    model, scaler = load_model_and_scaler(ticker, input_size)
+                    # Predict
+                    with st.spinner("Predicting 5-day ahead return and price..."):
+                        pred_return_5d, pred_price_5d = predict_5day_price(
+                            model, X_seq, last_log_close
+                        )
 
-# === Build last sequence ===
-X_seq, meta = build_last_sequence(df_ind, scaler, SEQ_LEN)
-if X_seq is None:
-    st.warning("Not enough rows to build a full sequence.")
-    st.stop()
+                    pred_pct_return_5d = (np.exp(pred_return_5d) - 1) * 100
+                    horizon_date = last_date + pd.Timedelta(days=5)
 
-last_log_close, last_date, last_price = meta
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Last close", f"${last_price:,.2f}", f"as of {last_date.date()}")
+                    col2.metric("Predicted 5-day return", f"{pred_pct_return_5d:,.2f}%")
+                    col3.metric("Predicted price in ~5 days", f"${pred_price_5d:,.2f}", f"by {horizon_date.date()}")
 
-# === Predict ===
-with st.spinner("Predicting 5-day ahead return and price..."):
-    pred_return_5d, pred_price_5d = predict_5day_price(model, X_seq, last_log_close)
+                    st.markdown("### Price history and 5-day forecast")
 
-# Convert 5-day log return to % return
-pred_pct_return_5d = (np.exp(pred_return_5d) - 1) * 100
+                    plot_df = df_ind[["date", "close"]].copy()
+                    plot_df.set_index("date", inplace=True)
+                    plot_df.loc[horizon_date, "close_forecast"] = pred_price_5d
 
-# Assume horizon date = last_date + 5 days (approx)
-horizon_date = last_date + pd.Timedelta(days=5)
+                    st.line_chart(plot_df)
 
-st.subheader("Prediction")
+# ======================
+# TAB 2: TRAINING & PERFORMANCE
+# ======================
+with tab_train:
+    st.subheader(f"Training vs Validation Loss – {ticker}")
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Last close", f"${last_price:,.2f}", f"as of {last_date.date()}")
-col2.metric("Predicted 5-day return", f"{pred_pct_return_5d:,.2f}%")
-col3.metric("Predicted price in 5 days", f"${pred_price_5d:,.2f}", f"by ~{horizon_date.date()}")
+    losses_path = f"artifacts/losses_{ticker}.pkl"
+    if os.path.exists(losses_path):
+        with open(losses_path, "rb") as f:
+            losses = pickle.load(f)
+        train_losses = losses.get("train_losses", [])
+        val_losses = losses.get("val_losses", [])
 
-# === Plot historical + forecast point ===
-st.subheader("Price history and 5-day ahead forecast")
+        if len(train_losses) > 0 and len(val_losses) == len(train_losses):
+            epochs = list(range(1, len(train_losses) + 1))
+            loss_df = pd.DataFrame(
+                {
+                    "epoch": epochs,
+                    "train_loss": train_losses,
+                    "val_loss": val_losses,
+                }
+            ).set_index("epoch")
 
-plot_df = df_ind[["date", "close"]].copy()
-plot_df.set_index("date", inplace=True)
+            st.line_chart(loss_df)
+            st.caption("Lower validation loss over epochs indicates better generalization.")
+        else:
+            st.info("Loss data found but not in the expected format.")
+    else:
+        st.info("No saved training/validation curves for this ticker.")
 
-# Add forecast point
-plot_df.loc[horizon_date, "close_forecast"] = pred_price_5d
+    st.markdown("---")
+    st.subheader("Overall LSTM Performance (All Tickers)")
 
-st.line_chart(plot_df)
+    results_path = "artifacts/results_summary.csv"
+    if os.path.exists(results_path):
+        results_df = pd.read_csv(results_path)
+        st.dataframe(results_df)
+    else:
+        st.info("Summary results table not found. You can generate it from the training notebook as 'artifacts/results_summary.csv'.")
 
-st.caption(
-    "Model output is a 5-day ahead log return. We convert that to a % return and implied future price "
-    "by applying it to the last observed closing price."
-)
+# ======================
+# TAB 3: INSTRUCTIONS
+# ======================
+with tab_info:
+    st.subheader("User Instructions")
+
+    st.markdown(
+        """
+### What this app does
+
+- Uses an LSTM regression model trained on **AAPL, MSFT, and AMZN**.
+- The model takes the last **60 days** of prices and technical indicators and predicts the **5-day ahead log return**.
+- The predicted log return is converted to:
+  - a **percentage return**, and  
+  - an **implied future price** 5 days from the last available date.
+
+### How to use it
+
+1. **Select a ticker** in the sidebar (AAPL, MSFT, AMZN).
+2. Choose the **history window** (number of years of past data to load).
+3. Go to the **Prediction** tab:
+   - Review recent historical prices in the table.
+   - See the model’s predicted 5-day return and future price.
+   - Inspect the price chart with the forecast point appended.
+4. Go to the **Training & Performance** tab:
+   - View the **training vs validation loss curves** for the selected ticker.
+   - View the **MAE/RMSE summary table** (if provided from training notebook).
+
+### Notes for evaluation
+
+- This interface is designed for the course project requirement:
+  - Web-based interactive app
+  - Ticker input and visible predictions
+  - Past history display
+  - Training/validation curves
+  - Additional figures/tables summarizing results
+- All models and scalers were pre-trained offline in a Colab notebook and loaded here.
+"""
+    )
