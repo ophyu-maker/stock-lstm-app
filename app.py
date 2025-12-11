@@ -371,12 +371,15 @@ with tab_pred:
 
                     st.markdown("### Price history and 5-day forecast")
 
-                    # ---- Build clean DataFrame for chart ----
-                    # history
-                    hist_df = df_ind[["date", "close"]].copy()
-                    hist_df["forecast"] = np.nan
+                    # Use last ~120 days for a clean chart
+                    hist_df = df_ind[["date", "close"]].copy().tail(120)
 
-                    # forecast row
+                    # Forecast series: last actual point + future point
+                    hist_df["forecast"] = np.nan
+                    # last actual date/price
+                    hist_df.loc[hist_df.index[-1], "forecast"] = last_price_float
+
+                    # future forecast row
                     extra_row = pd.DataFrame({
                         "date": [horizon_date],
                         "close": [np.nan],
@@ -386,5 +389,5 @@ with tab_pred:
                     plot_df = pd.concat([hist_df, extra_row], ignore_index=True)
                     plot_df.set_index("date", inplace=True)
 
-                    # only numeric columns
                     st.line_chart(plot_df[["close", "forecast"]])
+
