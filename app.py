@@ -289,19 +289,94 @@ with tab_train:
             st.info("Loss data found but not in the expected format.")
     else:
         st.info("No saved training/validation curves for this ticker.")
+    st.markdown("---")
+    st.subheader("Prediction Diagnostics")
+
+    # ------------------------------
+    # 2. LOAD DIAGNOSTICS CSV
+    # ------------------------------
+    diag_path = f"artifacts/diagnostics_{ticker}.csv"
+
+    if not os.path.exists(diag_path):
+        st.warning("No diagnostics file found for this ticker.")
+        st.stop()
+
+    diag_df = pd.read_csv(diag_path, parse_dates=["date"])
+
+    # Extract series
+    dates        = diag_df["date"]
+    actual       = diag_df["actual_return"]
+    pred         = diag_df["pred_return"]
+    residuals    = diag_df["residual"]
+    abs_error    = diag_df["abs_error"]
+    actual_abs   = diag_df["actual_abs"]
+
+    # ------------------------------
+    # 3. Actual vs Predicted Line Plot
+    # ------------------------------
+    st.subheader("Actual vs Predicted 5-Day Returns")
+
+    line_df = pd.DataFrame({
+        "date": dates,
+        "Actual": actual,
+        "Predicted": pred
+    }).set_index("date")
+
+    st.line_chart(line_df)
+
+    st.caption(
+        "Shows how closely the model follows actual 5-day log returns. "
+        "Large gaps indicate prediction difficulty during volatile periods."
+    )
+
+    # ------------------------------
+    # 4. Residual Plot
+    # ------------------------------
+    st.subheader("Residuals Over Test Set (Pred − Actual)")
+
+    res_df = pd.DataFrame({
+        "index": range(len(residuals)),
+        "Residual": residuals
+    }).set_index("index")
+
+    st.line_chart(res_df)
+
+    st.caption(
+        "Residuals near zero indicate accurate predictions. "
+        "Large positive or negative spikes show where the model struggled."
+    )
+
+    # ------------------------------
+    # 5. Error vs Volatility Scatter
+    # ------------------------------
+    st.subheader("Error vs Volatility")
+
+    scatter_df = pd.DataFrame({
+        "|Actual Return|": actual_abs,
+        "|Error|": abs_error
+    })
+
+    st.scatter_chart(scatter_df)
+
+    st.caption(
+        "Points higher on the chart indicate large prediction errors. "
+        "If errors increase with |actual return|, the model struggles more in volatile periods."
+    )
 
     st.markdown("---")
+
+    # ------------------------------
+    # 6. Results table
+    # ------------------------------
     st.subheader("Overall LSTM Performance (All Tickers)")
 
     results_path = "artifacts/results_summary.csv"
     if os.path.exists(results_path):
-        results_df = pd.read_csv(results_path)
-        st.dataframe(results_df)
+        st.dataframe(pd.read_csv(results_path))
     else:
-        st.info(
-            "Summary results table not found. "
-            "You can generate it from the training notebook as 'artifacts/results_summary.csv'."
-        )
+        st.info("results_summary.csv not found.")
+
+
 
 # ======================
 # TAB 3: PREDICTION
