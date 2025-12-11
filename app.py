@@ -327,7 +327,7 @@ with tab_pred:
                 else:
                     last_log_close, last_date, last_price = meta
 
-                    # Predict
+                    # Predict 5-day log return and price
                     with st.spinner("Predicting 5-day ahead return and price..."):
                         pred_return_5d, pred_price_5d = predict_5day_price(
                             model, X_seq, last_log_close
@@ -352,7 +352,19 @@ with tab_pred:
                     except Exception:
                         horizon_date_str = str(horizon_date)
 
-                    # Metrics
+                    # ========== NEW: 5-day daily path ==========
+                    # model gives 5-day log return r_5; assume equal log return each day
+                    daily_log_ret = pred_return_5d / 5.0
+
+                    horizon_dates = [
+                        last_date + pd.Timedelta(days=i) for i in range(1, 6)
+                    ]
+                    forecast_prices = [
+                        last_price_float * float(np.exp(daily_log_ret * i))
+                        for i in range(1, 6)
+                    ]
+
+                    # Metrics (for 5-day horizon)
                     col1, col2, col3 = st.columns(3)
                     col1.metric(
                         "Last close",
@@ -369,25 +381,37 @@ with tab_pred:
                         f"by {horizon_date_str}"
                     )
 
+                    # 5-day forecast table
+                    st.markdown("#### Approximate day-by-day forecast (equal daily returns assumption)")
+                    forecast_table = pd.DataFrame({
+                        "date": horizon_dates,
+                        "predicted_price": forecast_prices
+                    })
+                    st.dataframe(forecast_table)
+
                     st.markdown("### Price history and 5-day forecast")
 
-                    # Use last ~120 days for a clean chart
+                    # ---- Build clean DataFrame for chart ----
+                    # last ~120 days of history
                     hist_df = df_ind[["date", "close"]].copy().tail(120)
-
-                    # Forecast series: last actual point + future point
                     hist_df["forecast"] = np.nan
-                    # last actual date/price
-                    hist_df.loc[hist_df.index[-1], "forecast"] = last_price_float
 
-                    # future forecast row
-                    extra_row = pd.DataFrame({
-                        "date": [horizon_date],
-                        "close": [np.nan],
-                        "forecast": [pred_price_float],
+                    # add daily forecast points
+                    extra_rows = pd.DataFrame({
+                        "date": horizon_dates,
+                        "close": [np.nan] * len(horizon_dates),
+                        "forecast": forecast_prices,
                     })
 
-                    plot_df = pd.concat([hist_df, extra_row], ignore_index=True)
+                    plot_df = pd.concat([hist_df, extra_rows], ignore_index=True)
                     plot_df.set_index("date", inplace=True)
 
+                    # history line + 5-day forecast line
                     st.line_chart(plot_df[["close", "forecast"]])
+
+                    st.caption(
+                        "Forecast path assumes the 5-day log return is distributed "
+                        "equally across the next 5 days."
+                    )
+
 
