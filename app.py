@@ -10,6 +10,9 @@ import torch
 from torch import nn
 import yfinance as yf
 
+import altair as alt
+
+
 # ======================
 # GLOBAL SETTINGS
 # ======================
@@ -391,27 +394,43 @@ with tab_pred:
 
                     st.markdown("### Price history and 5-day forecast")
 
-                    # ---- Build clean DataFrame for chart ----
-                    # last ~120 days of history
-                    hist_df = df_ind[["date", "close"]].copy().tail(120)
-                    hist_df["forecast"] = np.nan
+                    # ---- Build data for last 5 historical closes ----
+                    hist_last5 = df_ind[["date", "close"]].copy().tail(5)
+                    hist_last5["date"] = pd.to_datetime(hist_last5["date"]).dt.date
+                    hist_last5.rename(columns={"close": "price"}, inplace=True)
+                    hist_last5["series"] = "History (close)"
 
-                    # add daily forecast points
-                    extra_rows = pd.DataFrame({
-                        "date": horizon_dates,
-                        "close": [np.nan] * len(horizon_dates),
-                        "forecast": forecast_prices,
+                    # ---- Build data for next 5 forecast days ----
+                    forecast_dates = [d.date() for d in horizon_dates]  # convert to plain date
+                    forecast_df = pd.DataFrame({
+                        "date": forecast_dates,
+                        "price": forecast_prices,
+                        "series": ["Forecast"] * len(forecast_prices),
                     })
 
-                    plot_df = pd.concat([hist_df, extra_rows], ignore_index=True)
-                    plot_df.set_index("date", inplace=True)
+                    # Combine history + forecast
+                    plot_df = pd.concat([hist_last5, forecast_df], ignore_index=True)
 
-                    # history line + 5-day forecast line
-                    st.line_chart(plot_df[["close", "forecast"]])
+                    # ---- Altair line chart with daily ticks ----
+                    chart = (
+                        alt.Chart(plot_df)
+                        .mark_line(point=True)
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("price:Q", title="Price (USD)"),
+                            color=alt.Color("series:N", title="Series"),
+                            tooltip=["date:T", "series:N", "price:Q"],
+                                )
+                        .properties(height=350)
+                        )
+
+                    st.altair_chart(chart, use_container_width=True)
 
                     st.caption(
-                        "Forecast path assumes the 5-day log return is distributed "
-                        "equally across the next 5 days."
+                        "History shows the last 5 closing prices. "
+                        "Forecast shows an approximate 5-day price path, "
+                        "assuming the 5-day log return is distributed equally across the next 5 days."
                     )
+   
 
 
