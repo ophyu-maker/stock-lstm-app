@@ -431,15 +431,20 @@ with tab_pred:
         hist_last5["date"] = pd.to_datetime(hist_last5["date"])
         forecast_df["date"] = pd.to_datetime(forecast_df["date"])
 
-                # ---- Build layered Altair chart (simple, no transforms) ----
+     # ---- Build layered Altair chart (simple, with string dates) ----
+
+        # Make nice string labels so x-axis is discrete (no duplicate dates)
+        hist_last5["date_str"] = hist_last5["date"].dt.strftime("%b %d")
+        forecast_df["date_str"] = forecast_df["date"].dt.strftime("%b %d")
+
         hist_chart = (
             alt.Chart(hist_last5)
             .mark_line(point=True, color="#1f77b4")
             .encode(
                 x=alt.X(
-                    "date:T",
+                    "date_str:N",
                     title="Date",
-                    axis=alt.Axis(format="%b %d", labelAngle=-45),
+                    axis=alt.Axis(labelAngle=-45),
                 ),
                 y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
                 tooltip=[
@@ -454,9 +459,9 @@ with tab_pred:
             .mark_line(point=True, color="#7fbfff")
             .encode(
                 x=alt.X(
-                    "date:T",
+                    "date_str:N",
                     title="Date",
-                    axis=alt.Axis(format="%b %d", labelAngle=-45),
+                    axis=alt.Axis(labelAngle=-45),
                 ),
                 y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
                 tooltip=[
@@ -467,7 +472,6 @@ with tab_pred:
         )
 
         chart = (hist_chart + forecast_chart).properties(height=350)
-
 
         st.altair_chart(chart, use_container_width=True)
 
@@ -482,3 +486,4 @@ with tab_pred:
             "Forecast shows an approximate 5-day price path, assuming the "
             "5-day log return is distributed equally across the next 5 days."
         )
+   
