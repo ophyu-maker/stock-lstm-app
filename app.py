@@ -337,14 +337,48 @@ with tab_pred:
                     pred_pct_return_5d = (np.exp(pred_return_5d) - 1) * 100
                     horizon_date = last_date + pd.Timedelta(days=5)
 
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Last close", f"${last_price:,.2f}", f"as of {last_date.date()}")
-                    col2.metric("Predicted 5-day return", f"{pred_pct_return_5d:,.2f}%")
-                    col3.metric(
-                        "Predicted price in ~5 days",
-                        f"${pred_price_5d:,.2f}",
-                        f"by {horizon_date.date()}",
-                    )
+# --- Safe casting for display ---
+try:
+    last_price_float = float(last_price)
+except Exception:
+    last_price_float = np.nan
+
+try:
+    pred_ret_float = float(pred_pct_return_5d)
+except Exception:
+    pred_ret_float = np.nan
+
+try:
+    pred_price_float = float(pred_price_5d)
+except Exception:
+    pred_price_float = np.nan
+
+try:
+    last_date_disp = str(pd.to_datetime(last_date).date())
+except Exception:
+    last_date_disp = str(last_date)
+
+try:
+    horizon_date_disp = str(pd.to_datetime(horizon_date).date())
+except Exception:
+    horizon_date_disp = str(horizon_date)
+
+col1, col2, col3 = st.columns(3)
+col1.metric(
+    "Last close",
+    "N/A" if np.isnan(last_price_float) else f"${last_price_float:,.2f}",
+    f"as of {last_date_disp}",
+)
+col2.metric(
+    "Predicted 5-day return",
+    "N/A" if np.isnan(pred_ret_float) else f"{pred_ret_float:,.2f}%",
+)
+col3.metric(
+    "Predicted price in ~5 days",
+    "N/A" if np.isnan(pred_price_float) else f"${pred_price_float:,.2f}",
+    f"by {horizon_date_disp}",
+)
+
 
                     st.markdown("### Price history and 5-day forecast")
 
