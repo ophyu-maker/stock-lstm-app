@@ -198,11 +198,11 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 LSTM-based Stock Price Prediction (5-Day Horizon)")
+st.title("LSTM-based Stock Price Prediction (5-Day Horizon)")
 
 st.markdown(
     """
-This web app exposes an LSTM model trained on multiple stocks with technical indicators.
+This web app exposes an LSTM model trained on multiple stocks (APPL,AMNZ,MSFT) with technical indicators.
 
 **Model design:**
 - Input: last **60 days** of price & indicators  
@@ -215,10 +215,10 @@ This web app exposes an LSTM model trained on multiple stocks with technical ind
 with st.sidebar:
     st.header("Settings")
     ticker = st.selectbox("Choose ticker", TICKERS, index=0)
-    years_back = st.slider("History window (years)", min_value=1, max_value=5, value=3)
+    years_back = st.slider("History window (for prediction only)", min_value=1, max_value=5, value=3)
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=365 * years_back)
-    st.caption("Predictions are for ~5 trading days ahead based on the latest available data.")
+    st.caption("Select how many years of past data the model should use when making the next 5-day forecast.")
 
 # Tabs in order: Instructions -> Training & Performance -> Prediction
 tab_info, tab_train, tab_pred = st.tabs(
