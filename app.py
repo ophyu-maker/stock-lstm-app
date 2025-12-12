@@ -398,7 +398,7 @@ with tab_train:
 
     
 # -------------------------------------------------------
-# PERFORMANCE FOR SELECTED TICKER ONLY
+# PERFORMANCE FOR SELECTED TICKER ONLY (KPI CARDS)
 # -------------------------------------------------------
     st.subheader(f"LSTM Performance – {ticker}")
 
@@ -407,16 +407,29 @@ with tab_train:
     if os.path.exists(results_path):
         df_results = pd.read_csv(results_path)
 
-    # filter to selected ticker
+    # Filter to selected ticker
         df_selected = df_results[df_results["ticker"] == ticker]
 
         if df_selected.empty:
             st.warning(f"No performance data found for {ticker}.")
         else:
-            st.dataframe(df_selected.reset_index(drop=True).style.hide(axis="index"))
+            # Get the single row
+            row = df_selected.iloc[0]
+            mae  = float(row["MAE"])
+            rmse = float(row["RMSE"])
+
+            col1, col2 = st.columns(2)
+            col1.metric("MAE (5-day log return)", f"{mae:.4f}")
+            col2.metric("RMSE (5-day log return)", f"{rmse:.4f}")
+
+            st.caption(
+                "MAE measures the average absolute prediction error, while RMSE penalizes larger errors "
+                "more strongly. Lower values indicate better model performance for this ticker."
+            )
 
     else:
         st.info("results_summary.csv not found.")
+
 
 # ======================
 # TAB 3: PREDICTION
