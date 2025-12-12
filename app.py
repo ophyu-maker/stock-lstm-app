@@ -396,19 +396,27 @@ with tab_train:
     # End diagnostics section
     st.markdown("---")
 
-    # -------------------------------------------------------
-    # OVERALL PERFORMANCE TABLE
-    # -------------------------------------------------------
-    st.subheader("Overall LSTM Performance (All Tickers)")
+    
+# -------------------------------------------------------
+# PERFORMANCE FOR SELECTED TICKER ONLY
+# -------------------------------------------------------
+    st.subheader(f"LSTM Performance – {ticker}")
 
     results_path = "artifacts/results_summary.csv"
+
     if os.path.exists(results_path):
-        st.dataframe(pd.read_csv(results_path))
+        df_results = pd.read_csv(results_path)
+
+    # filter to selected ticker
+        df_selected = df_results[df_results["ticker"] == ticker]
+
+        if df_selected.empty:
+            st.warning(f"No performance data found for {ticker}.")
+        else:
+            st.dataframe(df_selected)
+
     else:
         st.info("results_summary.csv not found.")
-
-
-
 
 # ======================
 # TAB 3: PREDICTION
