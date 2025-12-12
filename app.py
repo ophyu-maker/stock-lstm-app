@@ -215,7 +215,7 @@ This web app exposes an LSTM model trained on multiple stocks (APPL,AMNZ,MSFT) w
 with st.sidebar:
     st.header("Settings")
     ticker = st.selectbox("Choose ticker", TICKERS, index=0)
-    years_back = st.slider("Historical data range (for display only)", min_value=1, max_value=5, value=1)
+    years_back = st.slider("Historical data range (for table data only)", min_value=1, max_value=5, value=1)
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=365 * years_back)
     st.caption("Select how many past stock data you want to view in the Recent Historical Data table ")
