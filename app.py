@@ -198,11 +198,11 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("LSTM-based Stock Price Prediction (5-Day Horizon)")
+st.title("📊LSTM-based Stock Price Prediction (5-Day Horizon)")
 
 st.markdown(
     """
-This web app exposes an LSTM model trained on multiple stocks (APPL,AMNZ,MSFT) with technical indicators.
+This web app exposes an LSTM model trained on APPL, AMNZ, and MSFT stocks with technical indicators.
 
 **Model design:**
 - Input: last **60 days** of price & indicators  
