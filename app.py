@@ -215,10 +215,10 @@ This web app exposes an LSTM model trained on multiple stocks (APPL,AMNZ,MSFT) w
 with st.sidebar:
     st.header("Settings")
     ticker = st.selectbox("Choose ticker", TICKERS, index=0)
-    years_back = st.slider("History window (for prediction only)", min_value=1, max_value=5, value=3)
+    years_back = st.slider("Historical data range (for display only)", min_value=1, max_value=5, value=3)
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=365 * years_back)
-    st.caption("Select how many years of past data the model should use when making the next 5-day forecast.")
+    st.caption("Select how many past price data you want to view in the Recent Historical Data table ")
 
 # Tabs in order: Instructions -> Training & Performance -> Prediction
 tab_info, tab_train, tab_pred = st.tabs(
@@ -399,7 +399,7 @@ with tab_pred:
         st.stop()
 
     st.markdown("**Recent historical data**")
-    st.dataframe(df_raw.tail(10))
+    st.dataframe(df_raw)
 
     # Add indicators
     df_ind = add_indicators(df_raw)
