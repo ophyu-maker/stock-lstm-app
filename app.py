@@ -575,17 +575,25 @@ with tab_pred:
             "5-day log return is distributed equally across the next 5 days."
         )
 
-        st.write(df_ind.columns.tolist())
-        st.dataframe(df_ind.head(5))
-
-                
     # ============================================================
-    # TECHNICAL INDICATOR CHARTS (SAFE VERSION)
+    # TECHNICAL INDICATOR CHARTS (handles MultiIndex columns)
     # ============================================================
     st.markdown("### Technical indicator charts")
 
-    # Make a safe copy with proper datetime
+    # Start from df_ind
     ind_df = df_ind.copy()
+
+    # If columns are MultiIndex like [("close","amzn"), ...], flatten them
+    if isinstance(ind_df.columns, pd.MultiIndex):
+        ind_df.columns = [
+            c[0] if isinstance(c, tuple) and len(c) > 0 else str(c)
+            for c in ind_df.columns
+        ]
+    else:
+        # Just to be safe, cast to string
+        ind_df.columns = [str(c) for c in ind_df.columns]
+
+    # Ensure we have a datetime 'date' column
     if "date" in ind_df.columns:
         ind_df["date"] = pd.to_datetime(ind_df["date"])
 
@@ -664,6 +672,9 @@ with tab_pred:
                     tooltip=["date:T", "series:N", "value:Q"],
                 )
                 .properties(height=250, title="Close vs MA10 & MA20")
+            )
+            st.altair_chart(ma_chart, use_container_width=True)
+
             )
             st.altair_chart(ma_chart, use_container_width=True)
 
