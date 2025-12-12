@@ -592,6 +592,8 @@ with tab_pred:
             "5-day log return is distributed equally across the next 5 days."
         )
 
+    st.markdown("---")
+
     # ============================================================
     # TECHNICAL INDICATOR CHARTS (handles MultiIndex columns)
     # ============================================================
