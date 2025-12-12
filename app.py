@@ -621,7 +621,7 @@ with tab_pred:
             st.caption(
                 "RSI (Relative Strength Index) measures the speed and magnitude of recent price changes. "
                 "Values above 70 often indicate overbought conditions, while values below 30 suggest oversold conditions."
-            )
+            \n)
 
         else:
             st.warning("RSI column not found in data, cannot plot RSI chart.")
@@ -640,6 +640,12 @@ with tab_pred:
                 .properties(height=200, title="MACD (12, 26)")
             )
             st.altair_chart(macd_chart, use_container_width=True)
+
+            st.caption(
+                "MACD (Moving Average Convergence Divergence) tracks momentum by comparing short-term and long-term moving averages. "
+                "Rising MACD suggests strengthening upward momentum, while falling MACD indicates weakening momentum."
+                \n)
+
         else:
             st.warning("MACD column not found in data, cannot plot MACD chart.")
 
@@ -680,4 +686,9 @@ with tab_pred:
                 .properties(height=250, title="Close vs MA10 & MA20")
             )
             st.altair_chart(ma_chart, use_container_width=True)
+            st.caption(
+                "MA10 and MA20 smooth out short-term price fluctuations. "
+                "Crossovers between MA10 and MA20 can signal shifts in short-term trend direction."
+            )
+
 
