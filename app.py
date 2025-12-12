@@ -218,7 +218,7 @@ with st.sidebar:
     years_back = st.slider("Historical data range (for display only)", min_value=1, max_value=5, value=3)
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=365 * years_back)
-    st.caption("Select how many past price data you want to view in the Recent Historical Data table ")
+    st.caption("Select how many past stock data you want to view in the Recent Historical Data table ")
 
 # Tabs in order: Instructions -> Training & Performance -> Prediction
 tab_info, tab_train, tab_pred = st.tabs(
