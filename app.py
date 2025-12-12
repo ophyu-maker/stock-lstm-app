@@ -675,6 +675,3 @@ with tab_pred:
             )
             st.altair_chart(ma_chart, use_container_width=True)
 
-            )
-            st.altair_chart(ma_chart, use_container_width=True)
-
