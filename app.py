@@ -617,6 +617,12 @@ with tab_pred:
                 .properties(height=200, title="RSI (14)")
             )
             st.altair_chart(rsi_chart, use_container_width=True)
+            
+            st.caption(
+                "RSI (Relative Strength Index) measures the speed and magnitude of recent price changes. "
+                "Values above 70 often indicate overbought conditions, while values below 30 suggest oversold conditions."
+            )
+
         else:
             st.warning("RSI column not found in data, cannot plot RSI chart.")
 
