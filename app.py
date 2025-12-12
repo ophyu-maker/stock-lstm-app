@@ -575,64 +575,75 @@ with tab_pred:
             "5-day log return is distributed equally across the next 5 days."
         )
                 
-        # ============================================================
-        # OPTION 2: EXTRA FLEXIBLE HORIZON FORECAST (1–21 DAYS)
-        # ============================================================
-        st.markdown("### Extra: custom forecast horizon (1–21 days)")
+           # ============================================================
+    # TECHNICAL INDICATOR CHARTS
+    # ============================================================
+    st.markdown("### Technical indicator charts")
 
-        extra_horizon_days = st.slider(
-            "Choose forecast horizon (in days)",
-            min_value=1,
-            max_value=21,
-            value=5,
-            help=(
-                "Derived from the 5-day LSTM forecast by assuming a constant "
-                "average daily log-return."
-            ),
-        )
+    # Make a safe copy with proper datetime
+    ind_df = df_ind.copy()
+    if "date" in ind_df.columns:
+        ind_df["date"] = pd.to_datetime(ind_df["date"])
 
-        # Use the average daily log-return implied by the 5-day forecast
-        extra_dates = [
-            last_date + pd.Timedelta(days=i)
-            for i in range(1, extra_horizon_days + 1)
-        ]
-        extra_prices = [
-            last_price_float * float(np.exp(daily_log_ret * i))
-            for i in range(1, extra_horizon_days + 1)
-        ]
+    # Checkboxes to toggle which indicators to show
+    col_rsi, col_macd, col_ma = st.columns(3)
+    show_rsi = col_rsi.checkbox("Show RSI (14)", value=True, key="show_rsi")
+    show_macd = col_macd.checkbox("Show MACD (12, 26)", value=True, key="show_macd")
+    show_ma = col_ma.checkbox("Show MA10 & MA20", value=True, key="show_ma")
 
-        extra_df = pd.DataFrame(
-            {
-                "date": pd.to_datetime(extra_dates),
-                "price": extra_prices,
-            }
-        )
-        extra_df["date_str"] = extra_df["date"].dt.strftime("%b %d")
-
-        extra_chart = (
-            alt.Chart(extra_df)
-            .mark_line(point=True)
+    # ----- RSI chart -----
+    if show_rsi and "RSI" in ind_df.columns:
+        rsi_chart = (
+            alt.Chart(ind_df)
+            .mark_line()
             .encode(
-                x=alt.X(
-                    "date_str:N",
-                    title="Date",
-                    axis=alt.Axis(labelAngle=-45),
-                ),
-                y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
-                tooltip=[
-                    alt.Tooltip("date:T", title="Date"),
-                    alt.Tooltip("price:Q", title="Forecast price"),
-                ],
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("RSI:Q", title="RSI (14)"),
+                tooltip=["date:T", "RSI:Q"],
             )
-            .properties(height=300)
+            .properties(height=200, title="RSI (14)")
+        )
+        st.altair_chart(rsi_chart, use_container_width=True)
+
+    # ----- MACD chart -----
+    if show_macd and "MACD" in ind_df.columns:
+        macd_chart = (
+            alt.Chart(ind_df)
+            .mark_line()
+            .encode(
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("MACD:Q", title="MACD (12, 26)"),
+                tooltip=["date:T", "MACD:Q"],
+            )
+            .properties(height=200, title="MACD (12, 26)")
+        )
+        st.altair_chart(macd_chart, use_container_width=True)
+
+    # ----- MA10 & MA20 on price -----
+    if show_ma and all(c in ind_df.columns for c in ["ma_10", "ma_20", "close"]):
+        ma_df = ind_df[["date", "close", "ma_10", "ma_20"]].melt(
+            id_vars=["date"],
+            value_vars=["close", "ma_10", "ma_20"],
+            var_name="series",
+            value_name="value",
         )
 
-        st.altair_chart(extra_chart, use_container_width=True)
-
-        st.caption(
-            "This extended forecast assumes the same average daily log return as the "
-            "5-day LSTM prediction. For example, 1 ≈ 1 day, 5 ≈ one trading week, "
-            "and 21 ≈ one trading month."
+        ma_chart = (
+            alt.Chart(ma_df)
+            .mark_line()
+            .encode(
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("value:Q", title="Price / Moving Averages"),
+                color=alt.Color(
+                    "series:N",
+                    title="Series",
+                    scale=alt.Scale(
+                        domain=["close", "ma_10", "ma_20"],
+                        range=["#1f77b4", "#ff7f0e", "#2ca02c"],
+                    ),
+                ),
+                tooltip=["date:T", "series:N", "value:Q"],
+            )
+            .properties(height=250, title="Close vs MA10 & MA20")
         )
-
-            
+        st.altair_chart(ma_chart, use_container_width=True)
