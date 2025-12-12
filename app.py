@@ -620,7 +620,7 @@ with tab_pred:
             
             st.caption(
                 "RSI (Relative Strength Index) measures the speed and magnitude of recent price changes. "
-                "Values above 70 often indicate overbought conditions, while values below 30 suggest oversold conditions.\n"
+                "Values above 70 often indicate overbought conditions, while values below 30 suggest oversold conditions.\n \n \n"
             )
 
         else:
@@ -643,7 +643,7 @@ with tab_pred:
 
             st.caption(
                 "MACD (Moving Average Convergence Divergence) tracks momentum by comparing short-term and long-term moving averages. "
-                "Rising MACD suggests strengthening upward momentum, while falling MACD indicates weakening momentum.\n"
+                "Rising MACD suggests strengthening upward momentum, while falling MACD indicates weakening momentum.\n \n \n"
                 )
 
         else:
