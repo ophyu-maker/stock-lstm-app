@@ -490,70 +490,6 @@ with tab_pred:
     )
     st.dataframe(forecast_table)
 
-# ============================================================
-# OPTION 3: INTERACTIVE TECHNICAL INDICATOR CHARTS
-# ============================================================
-st.markdown("### Technical indicator charts")
-
-col_rsi, col_macd, col_ma = st.columns(3)
-show_rsi = col_rsi.checkbox("Show RSI (14)", value=True)
-show_macd = col_macd.checkbox("Show MACD (12, 26)", value=True)
-show_ma = col_ma.checkbox("Show MA10 & MA20", value=True)
-
-ind_df = df_ind.copy()
-ind_df["date"] = pd.to_datetime(ind_df["date"])
-
-# RSI chart
-if show_rsi:
-    rsi_chart = (
-        alt.Chart(ind_df)
-        .mark_line()
-        .encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("RSI:Q", title="RSI (14)"),
-            tooltip=["date:T", "RSI:Q"],
-        )
-        .properties(height=200)
-    )
-    st.altair_chart(rsi_chart, use_container_width=True)
-
-# MACD chart
-if show_macd:
-    macd_chart = (
-        alt.Chart(ind_df)
-        .mark_line()
-        .encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("MACD:Q", title="MACD (12, 26)"),
-            tooltip=["date:T", "MACD:Q"],
-        )
-        .properties(height=200)
-    )
-    st.altair_chart(macd_chart, use_container_width=True)
-
-# MA10 & MA20 on price
-if show_ma:
-    ma_df = ind_df[["date", "close", "ma_10", "ma_20"]].melt(
-        id_vars=["date", "close"],
-        value_vars=["ma_10", "ma_20"],
-        var_name="indicator",
-        value_name="value",
-    )
-
-    ma_chart = (
-        alt.Chart(ma_df)
-        .mark_line()
-        .encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("value:Q", title="Price / MA"),
-            color=alt.Color("indicator:N", title="Indicator"),
-            tooltip=["date:T", "indicator:N", "value:Q"],
-        )
-        .properties(height=250)
-    )
-    st.altair_chart(ma_chart, use_container_width=True)
-
-
     # ============================================================
     # PRICE HISTORY + 5-DAY FORECAST CHART
     # ============================================================
@@ -638,4 +574,65 @@ if show_ma:
             "Forecast shows an approximate 5-day price path, assuming the "
             "5-day log return is distributed equally across the next 5 days."
         )
+                
+        # ============================================================
+        # OPTION 2: EXTRA FLEXIBLE HORIZON FORECAST (1–21 DAYS)
+        # ============================================================
+        st.markdown("### Extra: custom forecast horizon (1–21 days)")
+
+        extra_horizon_days = st.slider(
+            "Choose forecast horizon (in days)",
+            min_value=1,
+            max_value=21,
+            value=5,
+            help=(
+                "Derived from the 5-day LSTM forecast by assuming a constant "
+                "average daily log-return."
+            ),
+        )
+
+        # Use the average daily log-return implied by the 5-day forecast
+        extra_dates = [
+            last_date + pd.Timedelta(days=i)
+            for i in range(1, extra_horizon_days + 1)
+        ]
+        extra_prices = [
+            last_price_float * float(np.exp(daily_log_ret * i))
+            for i in range(1, extra_horizon_days + 1)
+        ]
+
+        extra_df = pd.DataFrame(
+            {
+                "date": pd.to_datetime(extra_dates),
+                "price": extra_prices,
+            }
+        )
+        extra_df["date_str"] = extra_df["date"].dt.strftime("%b %d")
+
+        extra_chart = (
+            alt.Chart(extra_df)
+            .mark_line(point=True)
+            .encode(
+                x=alt.X(
+                    "date_str:N",
+                    title="Date",
+                    axis=alt.Axis(labelAngle=-45),
+                ),
+                y=alt.Y("price:Q", title="Price (USD)", scale=alt.Scale(zero=False)),
+                tooltip=[
+                    alt.Tooltip("date:T", title="Date"),
+                    alt.Tooltip("price:Q", title="Forecast price"),
+                ],
+            )
+            .properties(height=300)
+        )
+
+        st.altair_chart(extra_chart, use_container_width=True)
+
+        st.caption(
+            "This extended forecast assumes the same average daily log return as the "
+            "5-day LSTM prediction. For example, 1 ≈ 1 day, 5 ≈ one trading week, "
+            "and 21 ≈ one trading month."
+        )
+
             
