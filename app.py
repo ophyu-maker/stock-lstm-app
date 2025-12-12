@@ -575,8 +575,8 @@ with tab_pred:
             "5-day log return is distributed equally across the next 5 days."
         )
                 
-           # ============================================================
-    # TECHNICAL INDICATOR CHARTS
+    # ============================================================
+    # TECHNICAL INDICATOR CHARTS (SAFE VERSION)
     # ============================================================
     st.markdown("### Technical indicator charts")
 
@@ -592,58 +592,74 @@ with tab_pred:
     show_ma = col_ma.checkbox("Show MA10 & MA20", value=True, key="show_ma")
 
     # ----- RSI chart -----
-    if show_rsi and "RSI" in ind_df.columns:
-        rsi_chart = (
-            alt.Chart(ind_df)
-            .mark_line()
-            .encode(
-                x=alt.X("date:T", title="Date"),
-                y=alt.Y("RSI:Q", title="RSI (14)"),
-                tooltip=["date:T", "RSI:Q"],
+    if show_rsi:
+        if "RSI" in ind_df.columns and "date" in ind_df.columns:
+            rsi_chart = (
+                alt.Chart(ind_df)
+                .mark_line()
+                .encode(
+                    x=alt.X("date:T", title="Date"),
+                    y=alt.Y("RSI:Q", title="RSI (14)"),
+                    tooltip=["date:T", "RSI:Q"],
+                )
+                .properties(height=200, title="RSI (14)")
             )
-            .properties(height=200, title="RSI (14)")
-        )
-        st.altair_chart(rsi_chart, use_container_width=True)
+            st.altair_chart(rsi_chart, use_container_width=True)
+        else:
+            st.warning("RSI column not found in data, cannot plot RSI chart.")
 
     # ----- MACD chart -----
-    if show_macd and "MACD" in ind_df.columns:
-        macd_chart = (
-            alt.Chart(ind_df)
-            .mark_line()
-            .encode(
-                x=alt.X("date:T", title="Date"),
-                y=alt.Y("MACD:Q", title="MACD (12, 26)"),
-                tooltip=["date:T", "MACD:Q"],
+    if show_macd:
+        if "MACD" in ind_df.columns and "date" in ind_df.columns:
+            macd_chart = (
+                alt.Chart(ind_df)
+                .mark_line()
+                .encode(
+                    x=alt.X("date:T", title="Date"),
+                    y=alt.Y("MACD:Q", title="MACD (12, 26)"),
+                    tooltip=["date:T", "MACD:Q"],
+                )
+                .properties(height=200, title="MACD (12, 26)")
             )
-            .properties(height=200, title="MACD (12, 26)")
-        )
-        st.altair_chart(macd_chart, use_container_width=True)
+            st.altair_chart(macd_chart, use_container_width=True)
+        else:
+            st.warning("MACD column not found in data, cannot plot MACD chart.")
 
     # ----- MA10 & MA20 on price -----
-    if show_ma and all(c in ind_df.columns for c in ["ma_10", "ma_20", "close"]):
-        ma_df = ind_df[["date", "close", "ma_10", "ma_20"]].melt(
-            id_vars=["date"],
-            value_vars=["close", "ma_10", "ma_20"],
-            var_name="series",
-            value_name="value",
-        )
+    if show_ma:
+        required_cols = {"date", "close", "ma_10", "ma_20"}
+        missing = required_cols - set(ind_df.columns)
 
-        ma_chart = (
-            alt.Chart(ma_df)
-            .mark_line()
-            .encode(
-                x=alt.X("date:T", title="Date"),
-                y=alt.Y("value:Q", title="Price / Moving Averages"),
-                color=alt.Color(
-                    "series:N",
-                    title="Series",
-                    scale=alt.Scale(
-                        domain=["close", "ma_10", "ma_20"],
-                        range=["#1f77b4", "#ff7f0e", "#2ca02c"],
-                    ),
-                ),
-                tooltip=["date:T", "series:N", "value:Q"],
+        if missing:
+            st.warning(
+                "Cannot plot moving averages because these columns are missing: "
+                + ", ".join(sorted(missing))
             )
-            .properties(height=250, title="Close vs MA10 & MA20")
-        )
-        st.altair_chart(ma_chart, use_container_width=True)
+        else:
+            ma_df = ind_df[["date", "close", "ma_10", "ma_20"]].melt(
+                id_vars=["date"],
+                value_vars=["close", "ma_10", "ma_20"],
+                var_name="series",
+                value_name="value",
+            )
+
+            ma_chart = (
+                alt.Chart(ma_df)
+                .mark_line()
+                .encode(
+                    x=alt.X("date:T", title="Date"),
+                    y=alt.Y("value:Q", title="Price / Moving Averages"),
+                    color=alt.Color(
+                        "series:N",
+                        title="Series",
+                        scale=alt.Scale(
+                            domain=["close", "ma_10", "ma_20"],
+                            range=["#1f77b4", "#ff7f0e", "#2ca02c"],
+                        ),
+                    ),
+                    tooltip=["date:T", "series:N", "value:Q"],
+                )
+                .properties(height=250, title="Close vs MA10 & MA20")
+            )
+            st.altair_chart(ma_chart, use_container_width=True)
+
