@@ -399,7 +399,18 @@ with tab_pred:
         st.stop()
 
     st.markdown("**Recent historical data**")
-    st.dataframe(df_raw)
+
+# Option 1: user controls how many rows to see
+    num_rows = st.slider(
+        "Number of historical rows to display",
+        min_value=10,
+        max_value=int(len(df_raw)),
+        value=min(50, int(len(df_raw))),
+        step=10,
+    )
+
+    st.dataframe(df_raw.tail(num_rows))
+
 
     # Add indicators
     df_ind = add_indicators(df_raw)
@@ -478,6 +489,70 @@ with tab_pred:
         }
     )
     st.dataframe(forecast_table)
+
+# ============================================================
+# OPTION 3: INTERACTIVE TECHNICAL INDICATOR CHARTS
+# ============================================================
+st.markdown("### Technical indicator charts")
+
+col_rsi, col_macd, col_ma = st.columns(3)
+show_rsi = col_rsi.checkbox("Show RSI (14)", value=True)
+show_macd = col_macd.checkbox("Show MACD (12, 26)", value=True)
+show_ma = col_ma.checkbox("Show MA10 & MA20", value=True)
+
+ind_df = df_ind.copy()
+ind_df["date"] = pd.to_datetime(ind_df["date"])
+
+# RSI chart
+if show_rsi:
+    rsi_chart = (
+        alt.Chart(ind_df)
+        .mark_line()
+        .encode(
+            x=alt.X("date:T", title="Date"),
+            y=alt.Y("RSI:Q", title="RSI (14)"),
+            tooltip=["date:T", "RSI:Q"],
+        )
+        .properties(height=200)
+    )
+    st.altair_chart(rsi_chart, use_container_width=True)
+
+# MACD chart
+if show_macd:
+    macd_chart = (
+        alt.Chart(ind_df)
+        .mark_line()
+        .encode(
+            x=alt.X("date:T", title="Date"),
+            y=alt.Y("MACD:Q", title="MACD (12, 26)"),
+            tooltip=["date:T", "MACD:Q"],
+        )
+        .properties(height=200)
+    )
+    st.altair_chart(macd_chart, use_container_width=True)
+
+# MA10 & MA20 on price
+if show_ma:
+    ma_df = ind_df[["date", "close", "ma_10", "ma_20"]].melt(
+        id_vars=["date", "close"],
+        value_vars=["ma_10", "ma_20"],
+        var_name="indicator",
+        value_name="value",
+    )
+
+    ma_chart = (
+        alt.Chart(ma_df)
+        .mark_line()
+        .encode(
+            x=alt.X("date:T", title="Date"),
+            y=alt.Y("value:Q", title="Price / MA"),
+            color=alt.Color("indicator:N", title="Indicator"),
+            tooltip=["date:T", "indicator:N", "value:Q"],
+        )
+        .properties(height=250)
+    )
+    st.altair_chart(ma_chart, use_container_width=True)
+
 
     # ============================================================
     # PRICE HISTORY + 5-DAY FORECAST CHART
