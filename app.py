@@ -16,7 +16,20 @@ import altair as alt
 # ======================
 SEQ_LEN = 60
 DEVICE = torch.device("cpu")  # Streamlit Cloud: CPU only
-TICKERS = ["AAPL", "MSFT", "AMZN"]
+TICKERS = [
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "NVDA",
+    "TSM",
+    "COST",
+    "PEP",
+    "JPM",
+    "TSLA"
+]
+
 
 FEATURE_COLS = [
     "open", "high", "low", "close", "volume",
@@ -202,7 +215,7 @@ st.title("📊LSTM-based Stock Price Prediction (5-Day Horizon)")
 
 st.markdown(
     """
-This web app exposes an LSTM model trained on APPL, AMNZ, and MSFT stocks with technical indicators.
+This web app exposes an LSTM model trained on multiple stocks with technical indicators.
 
 **Model design:**
 - Input: last **60 days** of price & indicators  
@@ -235,7 +248,7 @@ with tab_info:
         """
 ### What this app does
 
-- Uses an LSTM regression model trained on **AAPL, MSFT, and AMZN**.
+- Uses an LSTM regression model trained on multiple stocks.
 - The model takes the last **60 days** of prices and technical indicators and predicts the **5-day ahead log return**.
 - The predicted log return is converted to:
   - a **percentage return**, and  
