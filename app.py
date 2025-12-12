@@ -413,7 +413,7 @@ with tab_train:
         if df_selected.empty:
             st.warning(f"No performance data found for {ticker}.")
         else:
-            st.dataframe(df_selected.reset_index(drop=True))
+            st.dataframe(df_selected.reset_index(drop=True).style.hide(axis="index"))
 
     else:
         st.info("results_summary.csv not found.")
