@@ -574,6 +574,10 @@ with tab_pred:
             "Forecast shows an approximate 5-day price path, assuming the "
             "5-day log return is distributed equally across the next 5 days."
         )
+
+        st.write(df_ind.columns.tolist())
+        st.dataframe(df_ind.head(5))
+
                 
     # ============================================================
     # TECHNICAL INDICATOR CHARTS (SAFE VERSION)
