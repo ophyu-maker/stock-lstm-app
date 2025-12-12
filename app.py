@@ -243,7 +243,7 @@ with tab_info:
 
 ### How to use it
 
-1. In the sidebar, select a **ticker** and **history window** (for forcasting 5-day return on Prediction tab).
+1. In the sidebar, select a **ticker** and **history data range** (to see past stock history on Prediction tab).
 2. Go to the **Prediction** tab to:
    - Review recent historical prices.
    - See the model’s 5-day-ahead return and future price.
